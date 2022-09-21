@@ -5,9 +5,11 @@ edition = "2021"
 author = "Ges2017"
 description = "Abstraction layer on top of p2panda and graphql to easily create schemas and perform operations on a p2panda node"
 license = "MIT"
+homepage = "https://github.com/Gers2017/zenode"
 readme = "README.md"
 repository = "https://github.com/Gers2017/zenode"
-publish = false
+keywords = ["p2panda", "peer-to-peer", "schema", "aquadoggo", "async"]
+publish = true
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
