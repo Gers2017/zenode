@@ -61,11 +61,6 @@ pub struct Operator {
     client: Client,
 }
 
-fn sort_fields<'a>(fields: &mut Vec<StrTuple<'a>>) {
-    // P2panda requires the fields in alphabetical order
-    fields.sort_by(|a, b| a.0.cmp(b.0))
-}
-
 impl Operator {
     /// Creates a new Operator from scratch
     pub fn new(version: usize, path: Option<PathBuf>, endpoint: &str) -> Self {
@@ -211,10 +206,10 @@ impl Operator {
     async fn send(&self, json: &str, action: OperationAction) -> String {
         println!("Performing {:?} action", action);
 
-        // 1. Load private key from given file, generate a new one if it doesn't exist yet
+        // 1. Load public key from key_pair
         let public_key = self.key_pair.public_key();
 
-        // 2. Parse operation from JSON file or stdin, it comes as a JSON string
+        // 2. Parse operation from JSON string
         let operation: PlainOperation = serde_json::from_str(json).expect("Error at parsing JSON");
 
         // 3. Send `nextArgs` GraphQL query to get the arguments from the node to create the next entry
@@ -263,7 +258,6 @@ impl Operator {
         .expect("Could not sign and encode entry");
 
         let operation_id = encoded_entry.hash();
-        println!("▶ Operation Id: \"{}\"", operation_id);
 
         // 5. Publish operation and entry with GraphQL `publish` mutation
         let query = format!(
@@ -289,14 +283,20 @@ impl Operator {
     }
 }
 
-/// Helper method to write a file.
+/// Utility function to sort `Vec<StrTuple>` in alphabetical order
+/// p2panda requires the fields in alphabetical order
+fn sort_fields<'a>(fields: &mut Vec<StrTuple<'a>>) {
+    fields.sort_by(|a, b| a.0.cmp(b.0))
+}
+
+/// Helper function to write a file.
 fn write_file(path: &PathBuf, content: &str) {
     let mut file =
         File::create(path).unwrap_or_else(|_| panic!("Could not create file {:?}", path));
     write!(&mut file, "{}", content).unwrap();
 }
 
-/// Helper method to read a private key from a file, deriving a key pair from it. If it doesn't
+/// Helper function to read a private key from a file, deriving a key pair from it. If it doesn't
 /// exist yet, a new key pair will be generated automatically.
 fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
     let path = path.unwrap_or(PathBuf::from("key.txt"));
@@ -315,20 +315,20 @@ fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).expect("Invalid private key")
 }
 
-/// Utility function to map a `Vec<(&str, &str)>` to `Vec<String>`
-/// The resulting string has the shape: `"a": "b"` or `"a": b` if b is a number
+/// Utility function to map a `Vec<StrTuple>` to `Vec<String>`
+/// The resulting string has the shape: `"a": "b"` or `"a": b` if b is a number or boolean
 fn fields_to_json_fields<'a>(fields: &Vec<StrTuple<'a>>) -> Vec<String> {
     fields
         .iter()
         .map(|(name, value)| -> String {
             let value = (**value).to_string();
 
-            if let Ok(x) = value.parse::<f64>() {
-                return format!(r#""{}": {}"#, name, x);
-            }
-
             if value == "true" || value == "false" {
                 return format!(r#""{}": {}"#, name, value);
+            }
+
+            if let Ok(x) = value.parse::<f64>() {
+                return format!(r#""{}": {}"#, name, x);
             }
 
             return format!(r#""{}": "{}""#, name, value);
