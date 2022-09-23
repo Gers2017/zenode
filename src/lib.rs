@@ -1,20 +1,18 @@
 mod queries;
+mod utils;
+
+use queries::*;
+use utils::*;
 
 use gql_client::Client;
 use p2panda_rs::{
     self,
     entry::{encode::sign_and_encode_entry, traits::AsEncodedEntry},
-    entry::{LogId, SeqNum},
-    hash::Hash,
     identity::KeyPair,
     operation::{encode::encode_plain_operation, plain::PlainOperation, traits::Actionable},
 };
-use queries::AllSchemaDefinitionResponse;
-use serde::Deserialize;
 use std::fmt::{Debug, Display};
-use std::fs::{read_to_string, File};
-use std::io::Write;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 
 #[allow(dead_code)]
 #[derive(Copy, Clone, Debug)]
@@ -31,32 +29,7 @@ impl Display for OperationAction {
     }
 }
 
-type StrTuple<'a> = (&'a str, &'a str);
-
-/// GraphQL response for `nextArgs` query.
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct NextArgsResponse {
-    next_args: NextArguments,
-}
-
-/// GraphQL response for `publish` mutation.
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-#[allow(dead_code)]
-struct PublishResponse {
-    publish: NextArguments,
-}
-
-/// GraphQL response giving us the next arguments to create an Bamboo entry.
-#[derive(Deserialize, Debug)]
-#[serde(rename_all = "camelCase")]
-struct NextArguments {
-    log_id: LogId,
-    seq_num: SeqNum,
-    skiplink: Option<Hash>,
-    backlink: Option<Hash>,
-}
+pub type StrTuple<'a> = (&'a str, &'a str);
 
 const DEFAULT_ENDPOINT: &str = "http://localhost:2020/graphql";
 
@@ -77,12 +50,14 @@ impl Operator {
     }
 
     /// Creates a new Operator with default values
-    /// `version: 1, path: "key.txt", endpoint: "http://localhost:2020/graphql"`
+    /// `version: 1, path: "key.txt", endpoint: ENDPOINT env variable or if unset "http://localhost:2020/graphql"`
     pub fn default() -> Self {
         let endpoint = std::env::var("ENDPOINT").unwrap_or(DEFAULT_ENDPOINT.to_string());
         Operator::new(1, None, &endpoint)
     }
 
+    /// Creates a schema by publishing the fields, retrieving the field ids
+    /// and publishing the schema with the field ids
     pub async fn create_schema<'a>(
         &self,
         name: &str,
@@ -96,6 +71,7 @@ impl Operator {
         self.publish_schema(name, description, &field_ids).await
     }
 
+    /// Publishes the schema definition to the node
     async fn publish_schema(
         &self,
         name: &str,
@@ -126,6 +102,7 @@ impl Operator {
         self.send_to_node(&json).await
     }
 
+    /// Publishes the field definitions to the node
     async fn publish_fields<'a>(
         &self,
         fields: &mut Vec<StrTuple<'a>>,
@@ -150,6 +127,7 @@ impl Operator {
         Ok(field_ids)
     }
 
+    /// Creates an instance following the shape of the schema with the respective schema_id
     pub async fn create_instance<'a>(
         &self,
         schema_id: &str,
@@ -172,6 +150,7 @@ impl Operator {
         self.send_to_node(&json).await
     }
 
+    /// Updates partially or completely an instance with the respective view_id
     pub async fn update_instance<'a>(
         &self,
         schema_id: &str,
@@ -195,6 +174,7 @@ impl Operator {
         self.send_to_node(&json).await
     }
 
+    /// Deletes an instance with the respective view_id
     pub async fn delete_instance(&self, schema_id: &str, view_id: &str) -> Result<String, String> {
         let json = format!(
             r#"[ {},{},"{}",["{}"] ]"#,
@@ -212,6 +192,7 @@ impl Operator {
         println!("▶️ DEBUG PUB_KEY: {}", public_key);
     }
 
+    /// Fetches all the schema definitions returning `AllSchemaDefinitionResponse` or `String` on error
     pub async fn debug_fetch_schemas(&self) -> Result<AllSchemaDefinitionResponse, String> {
         let query = r#"query {
 allSchemas: all_schema_definition_v1 {
@@ -241,6 +222,7 @@ allSchemas: all_schema_definition_v1 {
         Ok(data)
     }
 
+    /// Handles p2panda operations and graphql requests
     async fn send_to_node(&self, json: &str) -> Result<String, String> {
         // 1. Load public key from key_pair
         let public_key = self.key_pair.public_key();
@@ -337,59 +319,6 @@ allSchemas: all_schema_definition_v1 {
 
         Ok(operation_id.to_string())
     }
-}
-
-/// Utility function to sort `Vec<StrTuple>` in alphabetical order
-/// p2panda requires the fields in alphabetical order
-fn sort_fields<'a>(fields: &mut Vec<StrTuple<'a>>) {
-    fields.sort_by(|a, b| a.0.cmp(b.0))
-}
-
-/// Helper function to write a file.
-fn write_file(path: &PathBuf, content: &str) {
-    let mut file =
-        File::create(path).unwrap_or_else(|_| panic!("Could not create file {:?}", path));
-    write!(&mut file, "{}", content).unwrap();
-}
-
-/// Helper function to read a private key from a file, deriving a key pair from it. If it doesn't
-/// exist yet, a new key pair will be generated automatically.
-fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
-    let path = path.unwrap_or(PathBuf::from("key.txt"));
-
-    // Read private key from file or generate a new one
-    let private_key = if Path::exists(&path) {
-        let key = read_to_string(path).expect("Couldn't read file!");
-        key.replace('\n', "")
-    } else {
-        let key = hex::encode(KeyPair::new().private_key().to_bytes());
-        write_file(&path, &key);
-        key
-    };
-
-    // Derive key pair from private key
-    KeyPair::from_private_key_str(&private_key).expect("Invalid private key")
-}
-
-/// Utility function to map a `Vec<StrTuple>` to `Vec<String>`
-/// The resulting string has the shape: `"a": "b"` or `"a": b` if b is a number or boolean
-fn fields_to_json_fields<'a>(fields: &Vec<StrTuple<'a>>) -> Vec<String> {
-    fields
-        .iter()
-        .map(|(name, value)| -> String {
-            let value = (**value).to_string();
-
-            if value == "true" || value == "false" {
-                return format!(r#""{}": {}"#, name, value);
-            }
-
-            if let Ok(x) = value.parse::<f64>() {
-                return format!(r#""{}": {}"#, name, x);
-            }
-
-            return format!(r#""{}": "{}""#, name, value);
-        })
-        .collect()
 }
 
 #[cfg(test)]
