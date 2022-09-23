@@ -90,9 +90,9 @@ impl Operator {
         name: &str,
         description: &str,
         fields: &mut Vec<StrTuple<'a>>,
-    ) -> String {
+    ) -> Result<String, String> {
         // publish fields to node and retrieve field_ids
-        let field_ids = self.publish_fields(fields).await;
+        let field_ids = self.publish_fields(fields).await?;
 
         // create schema with field_ids
         self.publish_schema(name, description, &field_ids).await
@@ -103,7 +103,7 @@ impl Operator {
         name: &str,
         description: &str,
         field_ids: &Vec<String>,
-    ) -> String {
+    ) -> Result<String, String> {
         let field_content: String = field_ids
             .iter()
             .map(|it| format!("[\"{}\"]", it))
@@ -125,10 +125,13 @@ impl Operator {
             name
         );
 
-        self.send(&json, OperationAction::CREATE).await
+        self.send_to_node(&json).await
     }
 
-    async fn publish_fields<'a>(&self, fields: &mut Vec<StrTuple<'a>>) -> Vec<String> {
+    async fn publish_fields<'a>(
+        &self,
+        fields: &mut Vec<StrTuple<'a>>,
+    ) -> Result<Vec<String>, String> {
         sort_fields(fields);
 
         let mut field_ids: Vec<String> = Vec::with_capacity(fields.len());
@@ -142,18 +145,18 @@ impl Operator {
                 f_type
             );
 
-            let id = self.send(&json, OperationAction::CREATE).await;
+            let id = self.send_to_node(&json).await?;
             field_ids.push(id);
         }
 
-        field_ids
+        Ok(field_ids)
     }
 
     pub async fn create_instance<'a>(
         &self,
         schema_id: &str,
         fields: &mut Vec<StrTuple<'a>>,
-    ) -> String {
+    ) -> Result<String, String> {
         // (str, str)[] -> '"str": "str"'[]
         sort_fields(fields);
         let payload_content: Vec<String> = fields_to_json_fields(fields);
@@ -168,7 +171,7 @@ impl Operator {
             payload_content.join(", ")
         );
 
-        self.send(&json, OperationAction::CREATE).await
+        self.send_to_node(&json).await
     }
 
     pub async fn update_instance<'a>(
@@ -176,7 +179,7 @@ impl Operator {
         schema_id: &str,
         view_id: &str,
         fields: &mut Vec<StrTuple<'a>>,
-    ) -> String {
+    ) -> Result<String, String> {
         sort_fields(fields);
         let to_update: Vec<String> = fields_to_json_fields(fields);
 
@@ -191,10 +194,10 @@ impl Operator {
             to_update.join(", ")
         );
 
-        self.send(&json, OperationAction::UPDATE).await
+        self.send_to_node(&json).await
     }
 
-    pub async fn delete_instance(&self, schema_id: &str, view_id: &str) -> String {
+    pub async fn delete_instance(&self, schema_id: &str, view_id: &str) -> Result<String, String> {
         let json = format!(
             r#"[ {},{},"{}",["{}"] ]"#,
             self.version,
@@ -203,7 +206,7 @@ impl Operator {
             view_id
         );
 
-        self.send(&json, OperationAction::DELETE).await
+        self.send_to_node(&json).await
     }
 
     pub fn debug_print_public_key(&self) {
@@ -240,14 +243,17 @@ allSchemas: all_schema_definition_v1 {
         Ok(data)
     }
 
-    async fn send(&self, json: &str, action: OperationAction) -> String {
-        println!("Performing {:?} action", action);
-
+    async fn send_to_node(&self, json: &str) -> Result<String, String> {
         // 1. Load public key from key_pair
         let public_key = self.key_pair.public_key();
 
         // 2. Parse operation from JSON string
-        let operation: PlainOperation = serde_json::from_str(json).expect("Error at parsing JSON");
+        let operation_result = serde_json::from_str(json);
+
+        let operation: PlainOperation = match operation_result {
+            Ok(op) => op,
+            Err(_err) => return Err("Error at parsing JSON".to_string()),
+        };
 
         // 3. Send `nextArgs` GraphQL query to get the arguments from the node to create the next entry
         let query = format!(
@@ -268,11 +274,17 @@ allSchemas: all_schema_definition_v1 {
                 .map_or("null".to_owned(), |id| format!("\"{}\"", id)),
         );
 
-        let response = self
-            .client
-            .query_unwrap::<NextArgsResponse>(&query)
-            .await
-            .expect("GraphQL query to fetch `nextArgs` failed");
+        let response_result = self.client.query_unwrap::<NextArgsResponse>(&query).await;
+
+        let response = match response_result {
+            Ok(res) => res,
+            Err(err) => {
+                return Err(format!(
+                    "GraphQL query to fetch `nextArgs` failed:\n{}",
+                    err.to_string()
+                ))
+            }
+        };
 
         let NextArguments {
             log_id,
@@ -282,21 +294,27 @@ allSchemas: all_schema_definition_v1 {
         } = response.next_args;
 
         // 4. Create p2panda data! Encode operation, sign and encode entry
-        let encoded_operation =
-            encode_plain_operation(&operation).expect("Could not encode operation");
-        let encoded_entry = sign_and_encode_entry(
+        let encoded_operation_result = encode_plain_operation(&operation);
+        let encoded_operation = match encoded_operation_result {
+            Ok(enc) => enc,
+            Err(_err) => return Err("Could not encode operation".to_string()),
+        };
+
+        let encoded_entry_result = sign_and_encode_entry(
             &log_id,
             &seq_num,
             skiplink.as_ref(),
             backlink.as_ref(),
             &encoded_operation,
             &self.key_pair,
-        )
-        .expect("Could not sign and encode entry");
+        );
+
+        let encoded_entry = match encoded_entry_result {
+            Ok(enc) => enc,
+            Err(_err) => return Err("Could not sign and encode entry".to_string()),
+        };
 
         let operation_id = encoded_entry.hash();
-
-        // 5. Publish operation and entry with GraphQL `publish` mutation
         let query = format!(
             r#"
             mutation Publish {{
@@ -311,12 +329,15 @@ allSchemas: all_schema_definition_v1 {
             encoded_entry, encoded_operation
         );
 
-        self.client
-            .query_unwrap::<PublishResponse>(&query)
-            .await
-            .expect("GraphQL mutation `publish` failed");
+        let response_result = self.client.query_unwrap::<PublishResponse>(&query).await;
+        if let Err(err) = response_result {
+            return Err(format!(
+                "GraphQL mutation `publish` failed:\n{}",
+                err.to_string()
+            ));
+        }
 
-        operation_id.to_string()
+        Ok(operation_id.to_string())
     }
 }
 
@@ -376,25 +397,23 @@ fn fields_to_json_fields<'a>(fields: &Vec<StrTuple<'a>>) -> Vec<String> {
 #[cfg(test)]
 mod tests {
     use crate::Operator;
+
     #[tokio::test]
-    async fn create_schema_test() {
+    async fn create_schema_test() -> Result<(), String> {
+        let op = Operator::default();
+
+        // ---------
+        // Test create schema
+
         let mut fields = vec![
             ("name", "str"),
             ("number", "int"),
             ("pi", "float"),
             ("isFree", "bool"),
         ];
-
-        let op = Operator::default();
-
-        let schema_id = op.create_schema("test", "DESCRIPTION", &mut fields).await;
+        let schema_id = op.create_schema("test", "DESCRIPTION", &mut fields).await?;
 
         let schema_id = format!("test_{}", schema_id);
-
-        assert!(
-            !schema_id.is_empty(),
-            "Error at retrieving the schema_id on create_schema_test!",
-        );
 
         let mut fields = vec![
             ("name", "UMBRA"),
@@ -403,7 +422,7 @@ mod tests {
             ("isFree", "false"),
         ];
 
-        let instance_id = op.create_instance(&schema_id, &mut fields).await;
+        let instance_id = op.create_instance(&schema_id, &mut fields).await?;
 
         let mut fields = vec![
             ("name", "UMBRA_BEAR_420"),
@@ -413,14 +432,41 @@ mod tests {
 
         let update_id = op
             .update_instance(&schema_id, &instance_id, &mut fields)
-            .await;
-        let delete_id = op.delete_instance(&schema_id, &update_id).await;
+            .await?;
 
-        assert!(
-            !delete_id.is_empty(),
-            "Error at retrieving the delete_id on create_schema_test!",
-        );
+        let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
+
+        // ---------
+
+        // ---------
+        // Test create pokemon schema
+
+        let mut fields = vec![("pokemon_id", "int"), ("pokemon_name", "str")];
+
+        let id = op
+            .create_schema("POKEMON", "Pokemon schema", &mut fields)
+            .await?;
+
+        let schema_id = format!("POKEMON_{}", id);
+
+        let mut fields = vec![("pokemon_id", "1"), ("pokemon_name", "Bulbasaur")];
+        let instance_id = op.create_instance(&schema_id, &mut fields).await?;
+
+        let mut fields = vec![("pokemon_name", "Charmander")];
+        let update_id = op
+            .update_instance(&schema_id, &instance_id, &mut fields)
+            .await?;
+        let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
+
+        let mut fields = vec![("pokemon_id", "150"), ("pokemon_name", "Mewtwo")];
+        let instance_id = op.create_instance(&schema_id, &mut fields).await?;
+        let _delete_id = op.delete_instance(&schema_id, &instance_id).await?;
+
+        // ---------
+
+        Ok(())
     }
+
     #[tokio::test]
     async fn debug_fetch_schemas_test() {
         let operator = Operator::default();
