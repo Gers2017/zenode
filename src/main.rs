@@ -4,7 +4,7 @@ use zenode::Operator;
 async fn main() {
     let operator = Operator::default();
 
-    operator.print_public_key_debug();
+    operator.debug_print_public_key();
 
     let mut fields = vec![("pokemon_id", "int"), ("pokemon_name", "str")];
     let id = operator

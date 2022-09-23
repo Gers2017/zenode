@@ -1,3 +1,5 @@
+mod queries;
+
 use gql_client::Client;
 use p2panda_rs::{
     self,
@@ -7,6 +9,7 @@ use p2panda_rs::{
     identity::KeyPair,
     operation::{encode::encode_plain_operation, plain::PlainOperation, traits::Actionable},
 };
+use queries::AllSchemaDefinitionResponse;
 use serde::Deserialize;
 use std::fmt::{Debug, Display};
 use std::fs::{read_to_string, File};
@@ -198,9 +201,38 @@ impl Operator {
         self.send(&json, OperationAction::DELETE).await
     }
 
-    pub fn print_public_key_debug(&self) {
+    pub fn debug_print_public_key(&self) {
         let public_key = self.key_pair.public_key();
-        println!("DEBUG PUB_KEY: {}", public_key);
+        println!("▶️ DEBUG PUB_KEY: {}", public_key);
+    }
+
+    pub async fn debug_fetch_schemas(&self) -> Result<AllSchemaDefinitionResponse, String> {
+        let query = r#"query {
+allSchemas: all_schema_definition_v1 {
+      meta {
+        documentId
+        viewId
+      }
+      fields {
+        name
+        description
+        fields {
+          fields {
+            name
+            type
+          }
+        }
+      }
+    }
+  }
+"#;
+        let result = self.client.query_unwrap(&query).await;
+        let data: AllSchemaDefinitionResponse = match result {
+            Ok(res) => res,
+            Err(err) => return Err(format!("GraphQL error: {}", err.to_string())),
+        };
+
+        Ok(data)
     }
 
     async fn send(&self, json: &str, action: OperationAction) -> String {
@@ -383,5 +415,20 @@ mod tests {
             !delete_id.is_empty(),
             "Error at retrieving the delete_id on create_schema_test!",
         );
+    }
+    #[tokio::test]
+    async fn debug_fetch_schemas_test() {
+        let operator = Operator::default();
+
+        operator.debug_print_public_key();
+        let result = operator.debug_fetch_schemas().await;
+
+        match result {
+            Ok(data) => {
+                let json = serde_json::to_string(&data).expect("Error at parsing data to json");
+                println!("{}", &json);
+            }
+            Err(e) => panic!("{}", e),
+        };
     }
 }
