@@ -1,5 +1,6 @@
 mod queries;
 
+use dotenv::dotenv;
 use gql_client::Client;
 use p2panda_rs::{
     self,
@@ -58,6 +59,8 @@ struct NextArguments {
     backlink: Option<Hash>,
 }
 
+const DEFAULT_ENDPOINT: &str = "http://localhost:2020/graphql";
+
 pub struct Operator {
     version: usize,
     key_pair: KeyPair,
@@ -77,7 +80,9 @@ impl Operator {
     /// Creates a new Operator with default values
     /// `version: 1, path: "key.txt", endpoint: "http://localhost:2020/graphql"`
     pub fn default() -> Self {
-        Operator::new(1, None, "http://localhost:2020/graphql")
+        dotenv().ok();
+        let endpoint = std::env::var("ENDPOINT").unwrap_or(DEFAULT_ENDPOINT.to_string());
+        Operator::new(1, None, &endpoint)
     }
 
     pub async fn create_schema<'a>(

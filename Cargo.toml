@@ -14,6 +14,7 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+dotenv = "0.15.0"
 gql_client = "1.0.6"
 hex = "0.4.3"
 p2panda-rs = "0.6.0"
