@@ -1,6 +1,6 @@
 [package]
 name = "zenode"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2021"
 author = "Ges2017"
 description = "Abstraction layer on top of p2panda and graphql to easily create schemas and perform operations on a p2panda node"
@@ -14,7 +14,6 @@ publish = true
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-dotenv = "0.15.0"
 gql_client = "1.0.6"
 hex = "0.4.3"
 p2panda-rs = "0.6.0"
