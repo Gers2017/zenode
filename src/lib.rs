@@ -29,7 +29,11 @@ impl Display for OperationAction {
     }
 }
 
-pub type StrTuple<'a> = (&'a str, &'a str);
+pub type StringTuple = (String, String);
+
+pub fn field(a: &str, b: &str) -> StringTuple {
+    (a.to_string(), b.to_string())
+}
 
 const DEFAULT_ENDPOINT: &str = "http://localhost:2020/graphql";
 
@@ -56,13 +60,13 @@ impl Operator {
         Operator::new(1, None, &endpoint)
     }
 
-    /// Creates a schema by publishing the fields, retrieving the field ids
+    /// Creates a schema by first publishing the fields, retrieving the field ids
     /// and publishing the schema with the field ids
-    pub async fn create_schema<'a>(
+    pub async fn create_schema(
         &self,
         name: &str,
         description: &str,
-        fields: &mut Vec<StrTuple<'a>>,
+        fields: &mut Vec<StringTuple>,
     ) -> Result<String, String> {
         // publish fields to node and retrieve field_ids
         let field_ids = self.publish_fields(fields).await?;
@@ -103,10 +107,7 @@ impl Operator {
     }
 
     /// Publishes the field definitions to the node
-    async fn publish_fields<'a>(
-        &self,
-        fields: &mut Vec<StrTuple<'a>>,
-    ) -> Result<Vec<String>, String> {
+    async fn publish_fields(&self, fields: &mut Vec<StringTuple>) -> Result<Vec<String>, String> {
         sort_fields(fields);
 
         let mut field_ids: Vec<String> = Vec::with_capacity(fields.len());
@@ -128,12 +129,11 @@ impl Operator {
     }
 
     /// Creates an instance following the shape of the schema with the respective schema_id
-    pub async fn create_instance<'a>(
+    pub async fn create_instance(
         &self,
         schema_id: &str,
-        fields: &mut Vec<StrTuple<'a>>,
+        fields: &mut Vec<StringTuple>,
     ) -> Result<String, String> {
-        // (str, str)[] -> '"str": "str"'[]
         sort_fields(fields);
         let payload_content: Vec<String> = fields_to_json_fields(fields);
 
@@ -151,11 +151,11 @@ impl Operator {
     }
 
     /// Updates partially or completely an instance with the respective view_id
-    pub async fn update_instance<'a>(
+    pub async fn update_instance(
         &self,
         schema_id: &str,
         view_id: &str,
-        fields: &mut Vec<StrTuple<'a>>,
+        fields: &mut Vec<StringTuple>,
     ) -> Result<String, String> {
         sort_fields(fields);
         let to_update: Vec<String> = fields_to_json_fields(fields);
@@ -323,7 +323,7 @@ allSchemas: all_schema_definition_v1 {
 
 #[cfg(test)]
 mod tests {
-    use crate::Operator;
+    use crate::{field, Operator};
 
     #[tokio::test]
     async fn create_schema_test() -> Result<(), String> {
@@ -333,28 +333,28 @@ mod tests {
         // Test create schema
 
         let mut fields = vec![
-            ("name", "str"),
-            ("number", "int"),
-            ("pi", "float"),
-            ("isFree", "bool"),
+            field("name", "str"),
+            field("number", "int"),
+            field("pi", "float"),
+            field("isFree", "bool"),
         ];
         let schema_id = op.create_schema("test", "DESCRIPTION", &mut fields).await?;
 
         let schema_id = format!("test_{}", schema_id);
 
         let mut fields = vec![
-            ("name", "UMBRA"),
-            ("number", "69"),
-            ("pi", "3.1416"),
-            ("isFree", "false"),
+            field("name", "UMBRA"),
+            field("number", "69"),
+            field("pi", "3.1416"),
+            field("isFree", "false"),
         ];
 
         let instance_id = op.create_instance(&schema_id, &mut fields).await?;
 
         let mut fields = vec![
-            ("name", "UMBRA_BEAR_420"),
-            ("number", "10"),
-            ("isFree", "true"),
+            field("name", "UMBRA_BEAR_420"),
+            field("number", "10"),
+            field("isFree", "true"),
         ];
 
         let update_id = op
@@ -368,7 +368,7 @@ mod tests {
         // ---------
         // Test create pokemon schema
 
-        let mut fields = vec![("pokemon_id", "int"), ("pokemon_name", "str")];
+        let mut fields = vec![field("pokemon_id", "int"), field("pokemon_name", "str")];
 
         let id = op
             .create_schema("POKEMON", "Pokemon schema", &mut fields)
@@ -376,16 +376,16 @@ mod tests {
 
         let schema_id = format!("POKEMON_{}", id);
 
-        let mut fields = vec![("pokemon_id", "1"), ("pokemon_name", "Bulbasaur")];
+        let mut fields = vec![field("pokemon_id", "1"), field("pokemon_name", "Bulbasaur")];
         let instance_id = op.create_instance(&schema_id, &mut fields).await?;
 
-        let mut fields = vec![("pokemon_name", "Charmander")];
+        let mut fields = vec![field("pokemon_name", "Charmander")];
         let update_id = op
             .update_instance(&schema_id, &instance_id, &mut fields)
             .await?;
         let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
 
-        let mut fields = vec![("pokemon_id", "150"), ("pokemon_name", "Mewtwo")];
+        let mut fields = vec![field("pokemon_id", "150"), field("pokemon_name", "Mewtwo")];
         let instance_id = op.create_instance(&schema_id, &mut fields).await?;
         let _delete_id = op.delete_instance(&schema_id, &instance_id).await?;
 

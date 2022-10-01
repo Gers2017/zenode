@@ -1,15 +1,15 @@
 use p2panda_rs::identity::KeyPair;
 
-use crate::StrTuple;
+use crate::StringTuple;
 
 use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 
-/// Utility function to sort `Vec<StrTuple>` in alphabetical order
+/// Utility function to sort `Vec<StringTuple>` in alphabetical order
 /// p2panda requires the fields in alphabetical order
-pub fn sort_fields<'a>(fields: &mut Vec<StrTuple<'a>>) {
-    fields.sort_by(|a, b| a.0.cmp(b.0))
+pub fn sort_fields(fields: &mut Vec<StringTuple>) {
+    fields.sort_by(|a, b| a.0.cmp(&b.0))
 }
 
 /// Helper function to write a file.
@@ -38,9 +38,9 @@ pub fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).expect("Invalid private key")
 }
 
-/// Utility function to map a `Vec<StrTuple>` to `Vec<String>`
+/// Utility function to map a `Vec<StringTuple>` to `Vec<String>`
 /// The resulting string has the shape: `"a": "b"` or `"a": b` if b is a number or boolean
-pub fn fields_to_json_fields<'a>(fields: &Vec<StrTuple<'a>>) -> Vec<String> {
+pub fn fields_to_json_fields(fields: &Vec<StringTuple>) -> Vec<String> {
     fields
         .iter()
         .map(|(name, value)| -> String {
