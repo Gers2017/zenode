@@ -8,7 +8,7 @@ use std::path::{Path, PathBuf};
 
 /// Utility function to sort `Vec<StringTuple>` in alphabetical order
 /// p2panda requires the fields in alphabetical order
-pub fn sort_fields(fields: &mut Vec<StringTuple>) {
+pub fn sort_fields(fields: &mut [StringTuple]) {
     fields.sort_by(|a, b| a.0.cmp(&b.0))
 }
 
@@ -22,7 +22,7 @@ pub fn write_file(path: &PathBuf, content: &str) {
 /// Helper function to read a private key from a file, deriving a key pair from it. If it doesn't
 /// exist yet, a new key pair will be generated automatically.
 pub fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
-    let path = path.unwrap_or(PathBuf::from("key.txt"));
+    let path = path.unwrap_or_else(|| PathBuf::from("key.txt"));
 
     // Read private key from file or generate a new one
     let private_key = if Path::exists(&path) {
@@ -40,7 +40,7 @@ pub fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
 
 /// Utility function to map a `Vec<StringTuple>` to `Vec<String>`
 /// The resulting string has the shape: `"a": "b"` or `"a": b` if b is a number or boolean
-pub fn fields_to_json_fields(fields: &Vec<StringTuple>) -> Vec<String> {
+pub fn fields_to_json_fields(fields: &[StringTuple]) -> Vec<String> {
     fields
         .iter()
         .map(|(name, value)| -> String {
@@ -54,7 +54,7 @@ pub fn fields_to_json_fields(fields: &Vec<StringTuple>) -> Vec<String> {
                 return format!(r#""{}": {}"#, name, x);
             }
 
-            return format!(r#""{}": "{}""#, name, value);
+            format!(r#""{}": "{}""#, name, value)
         })
         .collect()
 }

@@ -18,9 +18,9 @@ use std::path::PathBuf;
 #[derive(Copy, Clone, Debug)]
 #[repr(u8)]
 enum OperationAction {
-    CREATE = 0,
-    UPDATE = 1,
-    DELETE = 2,
+    Create = 0,
+    Update = 1,
+    Delete = 2,
 }
 
 impl Display for OperationAction {
@@ -56,7 +56,7 @@ impl Operator {
     /// Creates a new Operator with default values
     /// `version: 1, path: "key.txt", endpoint: ENDPOINT env variable or if unset "http://localhost:2020/graphql"`
     pub fn default() -> Self {
-        let endpoint = std::env::var("ENDPOINT").unwrap_or(DEFAULT_ENDPOINT.to_string());
+        let endpoint = std::env::var("ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_string());
         Operator::new(1, None, &endpoint)
     }
 
@@ -80,7 +80,7 @@ impl Operator {
         &self,
         name: &str,
         description: &str,
-        field_ids: &Vec<String>,
+        field_ids: &[String],
     ) -> Result<String, String> {
         let field_content: String = field_ids
             .iter()
@@ -97,7 +97,7 @@ impl Operator {
         let json = format!(
             r#"[{}, {}, "schema_definition_v1", {{ "description": "{}", "fields": [{}], "name": "{}" }}]"#,
             self.version,
-            OperationAction::CREATE,
+            OperationAction::Create,
             description,
             field_content,
             name
@@ -116,7 +116,7 @@ impl Operator {
             let json = format!(
                 r#"[{}, {}, "schema_field_definition_v1", {{ "name": "{}", "type": "{}" }}]"#,
                 self.version,
-                OperationAction::CREATE,
+                OperationAction::Create,
                 name,
                 f_type
             );
@@ -132,7 +132,7 @@ impl Operator {
     pub async fn create_instance(
         &self,
         schema_id: &str,
-        fields: &mut Vec<StringTuple>,
+        fields: &mut [StringTuple],
     ) -> Result<String, String> {
         sort_fields(fields);
         let payload_content: Vec<String> = fields_to_json_fields(fields);
@@ -142,7 +142,7 @@ impl Operator {
         let json = format!(
             r#"[{}, {}, "{}", {{ {} }} ]"#,
             self.version,
-            OperationAction::CREATE,
+            OperationAction::Create,
             schema_id,
             payload_content.join(", ")
         );
@@ -155,7 +155,7 @@ impl Operator {
         &self,
         schema_id: &str,
         view_id: &str,
-        fields: &mut Vec<StringTuple>,
+        fields: &mut [StringTuple],
     ) -> Result<String, String> {
         sort_fields(fields);
         let to_update: Vec<String> = fields_to_json_fields(fields);
@@ -165,7 +165,7 @@ impl Operator {
         let json = format!(
             r#"[{}, {}, "{}", [ "{}" ], {{ {} }} ]"#,
             self.version,
-            OperationAction::UPDATE,
+            OperationAction::Update,
             schema_id,
             view_id,
             to_update.join(", ")
@@ -179,7 +179,7 @@ impl Operator {
         let json = format!(
             r#"[ {},{},"{}",["{}"] ]"#,
             self.version,
-            OperationAction::DELETE,
+            OperationAction::Delete,
             schema_id,
             view_id
         );
@@ -213,10 +213,10 @@ allSchemas: all_schema_definition_v1 {
     }
   }
 "#;
-        let result = self.client.query_unwrap(&query).await;
+        let result = self.client.query_unwrap(query).await;
         let data: AllSchemaDefinitionResponse = match result {
             Ok(res) => res,
-            Err(err) => return Err(format!("GraphQL error: {}", err.to_string())),
+            Err(err) => return Err(format!("GraphQL error: {}", err)),
         };
 
         Ok(data)
@@ -261,7 +261,7 @@ allSchemas: all_schema_definition_v1 {
             Err(err) => {
                 return Err(format!(
                     "GraphQL query to fetch `nextArgs` failed:\n{}",
-                    err.to_string()
+                    err
                 ))
             }
         };
@@ -311,10 +311,7 @@ allSchemas: all_schema_definition_v1 {
 
         let response_result = self.client.query_unwrap::<PublishResponse>(&query).await;
         if let Err(err) = response_result {
-            return Err(format!(
-                "GraphQL mutation `publish` failed:\n{}",
-                err.to_string()
-            ));
+            return Err(format!("GraphQL mutation `publish` failed:\n{}", err));
         }
 
         Ok(operation_id.to_string())
