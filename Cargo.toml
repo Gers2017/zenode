@@ -1,6 +1,6 @@
 [package]
 name = "zenode"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 author = "Ges2017"
 description = "Abstraction layer on top of p2panda and graphql to easily create schemas and perform operations on a p2panda node"
