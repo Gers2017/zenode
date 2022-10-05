@@ -188,44 +188,6 @@ impl Operator {
         self.send_to_node(&json).await
     }
 
-    pub fn debug_print_public_key(&self) {
-        let public_key = self.key_pair.public_key();
-        println!("▶️ DEBUG PUB_KEY: {}", public_key);
-    }
-
-    /// Fetches all the schema definitions returning `AllSchemaDefinitionResponse` or `String` on error
-    pub async fn debug_fetch_schemas(&self) -> Result<AllSchemaDefinitionResponse, String> {
-        let query = graphql::queries::get_all_schemas_query;
-        let result = self.client.query_unwrap(query).await;
-
-        let data: AllSchemaDefinitionResponse = match result {
-            Ok(res) => res,
-            Err(err) => return Err(format!("GraphQL error: {}", err)),
-        };
-
-        Ok(data)
-    }
-
-    pub async fn debug_fetch_schema(
-        &self,
-        document_id: &str,
-        view_id: &str,
-    ) -> Result<SchemaDefinitionResponse, String> {
-        let query = graphql::queries::get_schema_query;
-        let vars = GetSchemaVars {
-            id: document_id.to_string(),
-            view_id: view_id.to_string(),
-        };
-
-        let result = self.client.query_with_vars_unwrap(query, vars).await;
-
-        if let Err(err) = result {
-            return Err(err.message().into());
-        }
-
-        Ok(result.unwrap())
-    }
-
     /// Handles p2panda operations and graphql requests
     async fn send_to_node(&self, json: &str) -> Result<String, String> {
         // 1. Load public key from key_pair
@@ -320,6 +282,53 @@ impl Operator {
 
         Ok(operation_id.to_string())
     }
+
+    pub fn debug_print_public_key(&self) {
+        let public_key = self.key_pair.public_key();
+        println!("▶️ DEBUG PUB_KEY: {}", public_key);
+    }
+
+    /// Fetches all the schema definitions returning `AllSchemaDefinitionResponse` or `String` on error
+    pub async fn get_all_schema_definition(&self) -> Result<AllSchemaDefinitionResponse, String> {
+        let query = graphql::queries::get_all_schemas_query;
+        let data: AllSchemaDefinitionResponse = match self.client.query_unwrap(query).await {
+            Ok(data) => data,
+            Err(err) => return Err(err.to_string()),
+        };
+
+        Ok(data)
+    }
+
+    pub async fn get_schema_definition(
+        &self,
+        document_id: &str,
+        view_id: &str,
+    ) -> Result<SchemaDefinitionResponse, String> {
+        let query = graphql::queries::get_schema_query;
+        let vars = GetSchemaVars {
+            id: document_id.to_string(),
+            view_id: view_id.to_string(),
+        };
+
+        let data = match self.client.query_with_vars_unwrap(query, vars).await {
+            Ok(data) => data,
+            Err(err) => return Err(err.to_string()),
+        };
+
+        Ok(data)
+    }
+
+    pub async fn print_all_schemas(&self) -> Result<(), String> {
+        let data = self.get_all_schema_definition().await?;
+        serde_json::to_string_pretty(&data).map_err(|err| err.to_string())?;
+        Ok(())
+    }
+
+    pub async fn print_schema(&self, document_id: &str, view_id: &str) -> Result<(), String> {
+        let data = self.get_schema_definition(document_id, view_id).await?;
+        serde_json::to_string_pretty(&data).map_err(|err| err.to_string())?;
+        Ok(())
+    }
 }
 
 #[cfg(test)]
@@ -383,7 +392,7 @@ mod tests {
         let schema_id = format!("POKEMON_{}", id);
 
         // test debug
-        let res = op.debug_fetch_schema(&id, &id).await;
+        let res = op.get_schema_definition(&id, &id).await;
         assert!(res.is_ok());
 
         let mut fields = vec![
@@ -410,7 +419,7 @@ mod tests {
     #[tokio::test]
     async fn test_debug_fetch_schema() {
         let op = Operator::default();
-        let res = op.debug_fetch_schemas().await;
+        let res = op.get_all_schema_definition().await;
 
         assert!(res.is_ok(), "Should return all schema definitions");
 
