@@ -1,7 +1,8 @@
-mod queries;
+pub mod graphql;
 mod utils;
 
-use queries::*;
+use graphql::schemas::*;
+
 use utils::*;
 
 use gql_client::Client;
@@ -194,32 +195,35 @@ impl Operator {
 
     /// Fetches all the schema definitions returning `AllSchemaDefinitionResponse` or `String` on error
     pub async fn debug_fetch_schemas(&self) -> Result<AllSchemaDefinitionResponse, String> {
-        let query = r#"query {
-allSchemas: all_schema_definition_v1 {
-      meta {
-        documentId
-        viewId
-      }
-      fields {
-        name
-        description
-        fields {
-          fields {
-            name
-            type
-          }
-        }
-      }
-    }
-  }
-"#;
+        let query = graphql::queries::get_all_schemas_query;
         let result = self.client.query_unwrap(query).await;
+
         let data: AllSchemaDefinitionResponse = match result {
             Ok(res) => res,
             Err(err) => return Err(format!("GraphQL error: {}", err)),
         };
 
         Ok(data)
+    }
+
+    pub async fn debug_fetch_schema(
+        &self,
+        document_id: &str,
+        view_id: &str,
+    ) -> Result<SchemaDefinitionResponse, String> {
+        let query = graphql::queries::get_schema_query;
+        let vars = GetSchemaVars {
+            id: document_id.to_string(),
+            view_id: view_id.to_string(),
+        };
+
+        let result = self.client.query_with_vars_unwrap(query, vars).await;
+
+        if let Err(err) = result {
+            return Err(err.message().into());
+        }
+
+        Ok(result.unwrap())
     }
 
     /// Handles p2panda operations and graphql requests
@@ -365,7 +369,12 @@ mod tests {
         // ---------
         // Test create pokemon schema
 
-        let mut fields = vec![field("pokemon_id", "int"), field("pokemon_name", "str")];
+        let mut fields = vec![
+            field("id", "int"),
+            field("name", "str"),
+            field("shiny", "bool"),
+            field("exp", "float"),
+        ];
 
         let id = op
             .create_schema("POKEMON", "Pokemon schema", &mut fields)
@@ -373,18 +382,25 @@ mod tests {
 
         let schema_id = format!("POKEMON_{}", id);
 
-        let mut fields = vec![field("pokemon_id", "1"), field("pokemon_name", "Bulbasaur")];
+        // test debug
+        let res = op.debug_fetch_schema(&id, &id).await;
+        assert!(res.is_ok());
+
+        let mut fields = vec![
+            field("id", "1"),
+            field("name", "Bulbasaur"),
+            field("shiny", "false"),
+            field("exp", "3.1416"),
+        ];
+
         let instance_id = op.create_instance(&schema_id, &mut fields).await?;
 
-        let mut fields = vec![field("pokemon_name", "Charmander")];
+        let mut fields = vec![field("name", "Charmander"), field("shiny", "true")];
         let update_id = op
             .update_instance(&schema_id, &instance_id, &mut fields)
             .await?;
-        let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
 
-        let mut fields = vec![field("pokemon_id", "150"), field("pokemon_name", "Mewtwo")];
-        let instance_id = op.create_instance(&schema_id, &mut fields).await?;
-        let _delete_id = op.delete_instance(&schema_id, &instance_id).await?;
+        let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
 
         // ---------
 
@@ -392,18 +408,13 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn debug_fetch_schemas_test() {
-        let operator = Operator::default();
+    async fn test_debug_fetch_schema() {
+        let op = Operator::default();
+        let res = op.debug_fetch_schemas().await;
 
-        operator.debug_print_public_key();
-        let result = operator.debug_fetch_schemas().await;
+        assert!(res.is_ok(), "Should return all schema definitions");
 
-        match result {
-            Ok(data) => {
-                let json = serde_json::to_string(&data).expect("Error at parsing data to json");
-                println!("{}", &json);
-            }
-            Err(e) => panic!("{}", e),
-        };
+        let json = serde_json::to_string_pretty(&res.unwrap()).expect("ERROR!!!");
+        println!("{}", &json);
     }
 }
