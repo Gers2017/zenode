@@ -1,3 +1,4 @@
+use crate::builder::fields::FieldType;
 use crate::graphql::{self, schemas::*};
 use crate::utils::*;
 
@@ -30,6 +31,10 @@ pub type StringTuple = (String, String);
 
 pub fn field(a: &str, b: &str) -> StringTuple {
     (a.to_string(), b.to_string())
+}
+
+pub fn field_def(name: &str, field_type: FieldType) -> StringTuple {
+    (name.to_string(), field_type.to_string())
 }
 
 const DEFAULT_ENDPOINT: &str = "http://localhost:2020/graphql";

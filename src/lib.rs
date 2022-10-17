@@ -7,8 +7,9 @@ pub use operator::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::builder::{fields::*, SchemaBuilder};
-    use crate::{field, Operator};
+    use crate::builder::fields::FieldType::*;
+    use crate::builder::SchemaBuilder;
+    use crate::{field, field_def, Operator};
 
     #[tokio::test]
     async fn create_schema_test() -> Result<(), String> {
@@ -18,10 +19,10 @@ mod tests {
         // Test create schema
 
         let mut fields = vec![
-            field("name", "str"),
-            field("number", "int"),
-            field("pi", "float"),
-            field("isFree", "bool"),
+            field_def("name", Str),
+            field_def("number", Int),
+            field_def("pi", Float),
+            field_def("isFree", Bool),
         ];
         let schema_id = op.create_schema("test", "DESCRIPTION", &mut fields).await?;
 
@@ -54,10 +55,10 @@ mod tests {
         // Test create pokemon schema
 
         let mut fields = vec![
-            field("id", "int"),
-            field("name", "str"),
-            field("shiny", "bool"),
-            field("exp", "float"),
+            field_def("id", Int),
+            field_def("name", Str),
+            field_def("shiny", Bool),
+            field_def("exp", Float),
         ];
 
         let id = op
@@ -107,18 +108,18 @@ mod tests {
         let op = Operator::default();
 
         let mut b1 = SchemaBuilder::new("test_schema", "description", &op)
-            .field("name", FieldType::Str)
-            .field("age", FieldType::Int);
+            .field("name", Str)
+            .field("age", Int);
         b1.build().await?;
 
         let mut b2 = SchemaBuilder::new("child_schema_test", "description", &op)
-            .field("parent", FieldType::Relation(&b1.schema_id));
+            .field("parent", Relation(&b1.schema_id));
         b2.build().await?;
 
         let mut f = vec![field("name", "TEST"), field("age", "100")];
-        let id = b1.instantiate(&mut f).await?;
+        let instance_id = b1.instantiate(&mut f).await?;
 
-        let mut f = vec![field("parent", id.as_str())];
+        let mut f = vec![field("parent", instance_id.as_str())];
         b2.instantiate(&mut f).await?;
 
         Ok(())
