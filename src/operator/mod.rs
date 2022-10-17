@@ -45,21 +45,65 @@ pub struct Operator {
     client: Client,
 }
 
-impl Operator {
-    /// Creates a new Operator from scratch
-    pub fn new(version: usize, path: Option<PathBuf>, endpoint: &str) -> Self {
-        Operator {
+pub struct OperatorBuilder {
+    version: usize,
+    key_pair_path: Option<PathBuf>,
+    endpoint: String,
+}
+
+impl OperatorBuilder {
+    pub fn new() -> Self {
+        OperatorBuilder {
+            version: 1,
+            key_pair_path: None,
+            endpoint: DEFAULT_ENDPOINT.to_string(),
+        }
+    }
+
+    pub fn version(mut self, v: usize) -> Self {
+        self.version = v;
+        self
+    }
+
+    pub fn key_pair_path(mut self, path: Option<PathBuf>) -> Self {
+        self.key_pair_path = path;
+        self
+    }
+
+    pub fn endpoint(mut self, endpoint: Option<String>) -> Self {
+        if endpoint.is_some() {
+            self.endpoint = endpoint.map(|x| x.to_string()).unwrap();
+        }
+
+        self
+    }
+
+    pub fn build(self) -> Operator {
+        let Self {
             version,
-            key_pair: get_key_pair(path),
+            key_pair_path,
+            endpoint,
+        } = self;
+
+        Operator {
+            version: version,
+            key_pair: get_key_pair(key_pair_path),
             client: Client::new(endpoint),
         }
+    }
+}
+
+impl Operator {
+    /// Creates a new Operator from scratch
+    pub fn new() -> OperatorBuilder {
+        OperatorBuilder::new()
     }
 
     /// Creates a new Operator with default values
     /// `version: 1, path: "key.txt", endpoint: ENDPOINT env variable or if unset "http://localhost:2020/graphql"`
     pub fn default() -> Self {
-        let endpoint = std::env::var("ENDPOINT").unwrap_or_else(|_| DEFAULT_ENDPOINT.to_string());
-        Operator::new(1, None, &endpoint)
+        let endpoint = std::env::var("ENDPOINT").ok();
+        Operator::new().endpoint(endpoint).build()
     }
 
     /// Creates a schema by first publishing the fields, retrieving the field ids
