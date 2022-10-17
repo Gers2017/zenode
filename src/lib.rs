@@ -1,3 +1,4 @@
+pub mod builder;
 pub mod graphql;
 mod operator;
 mod utils;
@@ -6,6 +7,7 @@ pub use operator::*;
 
 #[cfg(test)]
 mod tests {
+    use crate::builder::{fields::*, SchemaBuilder};
     use crate::{field, Operator};
 
     #[tokio::test]
@@ -98,5 +100,27 @@ mod tests {
 
         let json = serde_json::to_string_pretty(&res.unwrap()).expect("ERROR!!!");
         println!("{}", &json);
+    }
+
+    #[tokio::test]
+    async fn test_schema_builder() -> Result<(), String> {
+        let op = Operator::default();
+
+        let mut b1 = SchemaBuilder::new("test_schema", "description", &op)
+            .field("name", FieldType::Str)
+            .field("age", FieldType::Int);
+        b1.build().await?;
+
+        let mut b2 = SchemaBuilder::new("child_schema_test", "description", &op)
+            .field("parent", FieldType::Relation(&b1.schema_id));
+        b2.build().await?;
+
+        let mut f = vec![field("name", "TEST"), field("age", "100")];
+        let id = b1.instantiate(&mut f).await?;
+
+        let mut f = vec![field("parent", id.as_str())];
+        b2.instantiate(&mut f).await?;
+
+        Ok(())
     }
 }
