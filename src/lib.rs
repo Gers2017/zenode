@@ -9,6 +9,7 @@ pub use operator::*;
 mod tests {
     use crate::builder::fields::FieldType::*;
     use crate::builder::SchemaBuilder;
+    use crate::utils::{field_to_json, sort_fields};
     use crate::{field, field_def, Operator};
 
     #[tokio::test]
@@ -18,74 +19,52 @@ mod tests {
         // ---------
         // Test create schema
 
-        let mut fields = vec![
-            field_def("name", Str),
-            field_def("number", Int),
-            field_def("pi", Float),
-            field_def("isFree", Bool),
-        ];
-        let schema_id = op.create_schema("test", "DESCRIPTION", &mut fields).await?;
+        let schema_id = op
+            .create_schema(
+                "test",
+                "DESCRIPTION",
+                &mut [
+                    field_def("name", Str),
+                    field_def("number", Int),
+                    field_def("pi", Float),
+                    field_def("isFree", Bool),
+                ],
+            )
+            .await?;
 
         let schema_id = format!("test_{}", schema_id);
 
-        let mut fields = vec![
-            field("name", "UMBRA"),
-            field("number", "69"),
-            field("pi", "3.1416"),
-            field("isFree", "false"),
-        ];
-
-        let instance_id = op.create_instance(&schema_id, &mut fields).await?;
-
-        let mut fields = vec![
-            field("name", "UMBRA_BEAR_420"),
-            field("number", "10"),
-            field("isFree", "true"),
-        ];
+        let instance_id = op
+            .create_instance(
+                &schema_id,
+                &mut [
+                    field("name", "UMBRA"),
+                    field("number", "69"),
+                    field("pi", "3.1416"),
+                    field("isFree", "false"),
+                ],
+            )
+            .await?;
 
         let update_id = op
-            .update_instance(&schema_id, &instance_id, &mut fields)
+            .update_instance(
+                &schema_id,
+                &instance_id,
+                &mut [
+                    field("name", "UMBRA_BEAR"),
+                    field("number", "10"),
+                    field("pi", "4.0"),
+                    field("isFree", "true"),
+                ],
+            )
             .await?;
 
         let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
 
-        // ---------
-
-        // ---------
-        // Test create pokemon schema
-
-        let mut fields = vec![
-            field_def("id", Int),
-            field_def("name", Str),
-            field_def("shiny", Bool),
-            field_def("exp", Float),
-        ];
-
-        let id = op
-            .create_schema("POKEMON", "Pokemon schema", &mut fields)
-            .await?;
-
-        let schema_id = format!("POKEMON_{}", id);
-
-        // test debug
+        // test get_schema_definition
+        let id = schema_id.replace("test_", "");
         let res = op.get_schema_definition(&id, &id).await;
         assert!(res.is_ok());
-
-        let mut fields = vec![
-            field("id", "1"),
-            field("name", "Bulbasaur"),
-            field("shiny", "false"),
-            field("exp", "3.1416"),
-        ];
-
-        let instance_id = op.create_instance(&schema_id, &mut fields).await?;
-
-        let mut fields = vec![field("name", "Charmander"), field("shiny", "true")];
-        let update_id = op
-            .update_instance(&schema_id, &instance_id, &mut fields)
-            .await?;
-
-        let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
 
         // ---------
 
@@ -96,32 +75,93 @@ mod tests {
     async fn test_debug_fetch_schema() {
         let op = Operator::default();
         let res = op.get_all_schema_definition().await;
-
         assert!(res.is_ok(), "Should return all schema definitions");
 
-        let json = serde_json::to_string_pretty(&res.unwrap()).expect("ERROR!!!");
-        println!("{}", &json);
+        let json = serde_json::to_string_pretty(&res.unwrap());
+        assert!(json.is_ok());
     }
 
     #[tokio::test]
     async fn test_schema_builder() -> Result<(), String> {
         let op = Operator::default();
 
-        let mut b1 = SchemaBuilder::new("test_schema", "description", &op)
+        let mut parent_builder = SchemaBuilder::new("parent", "PARENT TEST SCHEMA", &op)
             .field("name", Str)
-            .field("age", Int);
-        b1.build().await?;
+            .field("points", Int);
 
-        let mut b2 = SchemaBuilder::new("child_schema_test", "description", &op)
-            .field("parent", Relation(&b1.schema_id));
-        b2.build().await?;
+        parent_builder.build().await?;
 
-        let mut f = vec![field("name", "TEST"), field("age", "100")];
-        let instance_id = b1.instantiate(&mut f).await?;
+        let parent_schema_id = parent_builder.schema_id.as_str();
 
-        let mut f = vec![field("parent", instance_id.as_str())];
-        b2.instantiate(&mut f).await?;
+        let mut pet_builder = SchemaBuilder::new("pet", "PET TEST SCHEMA", &op)
+            .field("name", Str)
+            .field("parent", Relation(parent_schema_id));
+
+        pet_builder.build().await?;
+
+        let parent_instance_id = parent_builder
+            .instantiate(&mut [field("name", "Alice"), field("points", "100")])
+            .await?;
+
+        pet_builder
+            .instantiate(&mut [field("name", "Blue"), field("parent", &parent_instance_id)])
+            .await?;
 
         Ok(())
+    }
+
+    #[test]
+    fn test_field_to_json() {
+        assert_eq!(
+            field_to_json(&field("name", "false")),
+            String::from(r#""name": false"#)
+        );
+
+        assert_eq!(
+            field_to_json(&field("name", "Bob")),
+            String::from(r#""name": "Bob""#)
+        );
+
+        assert_eq!(
+            field_to_json(&field("number", "1000")),
+            String::from(r#""number": 1000"#)
+        );
+
+        assert_eq!(
+            field_to_json(&field("float", "387.927")),
+            String::from(r#""float": 387.927"#)
+        );
+
+        assert_eq!(
+            field_to_json(&field("vec", r#"["id_020208973fb0"]"#)),
+            String::from(r#""vec": ["id_020208973fb0"]"#)
+        );
+    }
+
+    #[test]
+    fn test_sort_fields() {
+        let fields = &mut [
+            field("omega", "_"),
+            field("delta", "_"),
+            field("gamma", "_"),
+            field("alpha", "_"),
+            field("beta", "_"),
+        ];
+
+        sort_fields(fields);
+
+        let expected = &[
+            field("alpha", "_"),
+            field("beta", "_"),
+            field("delta", "_"),
+            field("gamma", "_"),
+            field("omega", "_"),
+        ];
+
+        for (i, f) in fields.iter().enumerate() {
+            let (expected_name, _) = &expected[i];
+            let (name, _) = f;
+            assert_eq!(*name, *expected_name);
+        }
     }
 }
