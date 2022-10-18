@@ -112,7 +112,7 @@ impl Operator {
         &self,
         name: &str,
         description: &str,
-        fields: &mut Vec<StringTuple>,
+        fields: &mut [StringTuple],
     ) -> Result<String, String> {
         // publish fields to node and retrieve field_ids
         let field_ids = self.publish_fields(fields).await?;
@@ -153,7 +153,7 @@ impl Operator {
     }
 
     /// Publishes the field definitions to the node
-    async fn publish_fields(&self, fields: &mut Vec<StringTuple>) -> Result<Vec<String>, String> {
+    async fn publish_fields(&self, fields: &mut [StringTuple]) -> Result<Vec<String>, String> {
         sort_fields(fields);
 
         let mut field_ids: Vec<String> = Vec::with_capacity(fields.len());
