@@ -37,6 +37,18 @@ pub fn field_def(name: &str, field_type: FieldType) -> StringTuple {
     (name.to_string(), field_type.to_string())
 }
 
+pub fn collection_field(name: &str, ids: &[&str]) -> StringTuple {
+    let vec: Vec<String> = ids.iter().map(|x| format!("\"{}\"", x)).collect();
+    let j = vec.join(", ");
+    (name.to_string(), format!("[{}]", j))
+}
+
+pub fn collection_list_field(name: &str, ids: &[&str]) -> StringTuple {
+    let vec: Vec<String> = ids.iter().map(|x| format!("[\"{}\"]", x)).collect();
+    let j = vec.join(", ");
+    (name.to_string(), format!("[{}]", j))
+}
+
 const DEFAULT_ENDPOINT: &str = "http://localhost:2020/graphql";
 
 pub struct Operator {
@@ -243,7 +255,7 @@ impl Operator {
 
         let operation: PlainOperation = match operation_result {
             Ok(op) => op,
-            Err(_err) => return Err("Error at parsing JSON".to_string()),
+            Err(err) => return Err(err.to_string()),
         };
 
         // 3. Send `nextArgs` GraphQL query to get the arguments from the node to create the next entry
