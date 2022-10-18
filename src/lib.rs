@@ -10,7 +10,7 @@ mod tests {
     use crate::builder::fields::FieldType::*;
     use crate::builder::SchemaBuilder;
     use crate::utils::{field_to_json, sort_fields};
-    use crate::{field, field_def, Operator};
+    use crate::{collection_field, field, field_def, Operator};
 
     #[tokio::test]
     async fn create_schema_test() -> Result<(), String> {
@@ -79,6 +79,51 @@ mod tests {
 
         let json = serde_json::to_string_pretty(&res.unwrap());
         assert!(json.is_ok());
+    }
+
+    #[tokio::test]
+    async fn test_relation_list() -> Result<(), String> {
+        let op = Operator::default();
+
+        let product_schema_id = op
+            .create_schema(
+                "product_test",
+                "Product test schema",
+                &mut [field_def("name", Str)],
+            )
+            .await?;
+
+        let product_schema_id = format!("product_test_{}", &product_schema_id);
+
+        let client_schema_id = op
+            .create_schema(
+                "client_test",
+                "Client test schema",
+                &mut [field_def("products", RelationList(&product_schema_id))],
+            )
+            .await?;
+
+        let client_schema_id = format!("client_test_{}", &client_schema_id);
+
+        let product_a_id = op
+            .create_instance(&product_schema_id, &mut [field("name", "product_a")])
+            .await?;
+
+        let product_b_id = op
+            .create_instance(&product_schema_id, &mut [field("name", "product_b")])
+            .await?;
+
+        let _client_id = op
+            .create_instance(
+                &client_schema_id,
+                &mut [collection_field(
+                    "products",
+                    &[&product_a_id, &product_b_id],
+                )],
+            )
+            .await?;
+
+        Ok(())
     }
 
     #[tokio::test]
