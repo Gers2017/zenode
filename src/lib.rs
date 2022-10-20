@@ -3,14 +3,14 @@ pub mod graphql;
 mod operator;
 mod utils;
 
+pub use builder::fields::FieldType;
 pub use operator::*;
 
 #[cfg(test)]
 mod tests {
-    use crate::builder::fields::FieldType::*;
     use crate::builder::SchemaBuilder;
     use crate::utils::{field_to_json, sort_fields};
-    use crate::{collection_field, field, field_def, Operator};
+    use crate::{collection_field, field, field_def, FieldType::*, Operator};
 
     #[tokio::test]
     async fn create_schema_test() -> Result<(), String> {
@@ -19,7 +19,7 @@ mod tests {
         // ---------
         // Test create schema
 
-        let schema_id = op
+        let id = op
             .create_schema(
                 "test",
                 "DESCRIPTION",
@@ -32,7 +32,7 @@ mod tests {
             )
             .await?;
 
-        let schema_id = format!("test_{}", schema_id);
+        let schema_id = format!("test_{}", &id);
 
         let instance_id = op
             .create_instance(
@@ -62,7 +62,6 @@ mod tests {
         let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
 
         // test get_schema_definition
-        let id = schema_id.replace("test_", "");
         let res = op.get_schema_definition(&id, &id).await;
         assert!(res.is_ok());
 
