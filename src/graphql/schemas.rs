@@ -5,6 +5,9 @@ use p2panda_rs::{
 use serde::{Deserialize, Serialize};
 use std::fmt::Debug;
 
+// Necessary to create operations
+// ------------------------------------------------
+
 /// GraphQL response for `nextArgs` query.
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -13,6 +16,7 @@ pub struct NextArgsResponse {
 }
 
 /// GraphQL response for `publish` mutation.
+// #[allow(dead_code)]
 #[derive(Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 #[allow(dead_code)]
@@ -30,6 +34,9 @@ pub struct NextArguments {
     pub backlink: Option<Hash>,
 }
 
+// Responses from GraphQL
+// ------------------------------------------------
+
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct AllSchemaDefinitionResponse {
@@ -37,9 +44,19 @@ pub struct AllSchemaDefinitionResponse {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SchemaDefinitionResponse {
+    pub schema: SchemaDefinition,
+}
+
+// GraphQL Schemas
+// ------------------------------------------------
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
 pub struct SchemaDefinition {
     pub meta: Meta,
-    pub fields: FieldsSchemaDefinition,
+    pub fields: SchemaDefinitionFields,
 }
 
 #[derive(Serialize, Deserialize, Debug)]
@@ -51,7 +68,7 @@ pub struct Meta {
 
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
-pub struct FieldsSchemaDefinition {
+pub struct SchemaDefinitionFields {
     pub name: String,
     pub description: String,
     pub fields: Vec<Fields>,
@@ -69,4 +86,13 @@ pub struct FieldDefinition {
     pub name: String,
     #[serde(rename = "type")]
     pub type_: String,
+}
+
+// Var structs for GraphQL queries
+// ------------------------------------------------
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct GetSchemaVars {
+    pub id: String,
+    pub view_id: String,
 }

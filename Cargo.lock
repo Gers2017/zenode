@@ -1594,7 +1594,7 @@ dependencies = [
 
 [[package]]
 name = "zenode"
-version = "0.3.0"
+version = "0.3.4"
 dependencies = [
  "gql_client",
  "hex",

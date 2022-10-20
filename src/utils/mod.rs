@@ -41,20 +41,31 @@ pub fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
 /// Utility function to map a `Vec<StringTuple>` to `Vec<String>`
 /// The resulting string has the shape: `"a": "b"` or `"a": b` if b is a number or boolean
 pub fn fields_to_json_fields(fields: &[StringTuple]) -> Vec<String> {
-    fields
-        .iter()
-        .map(|(name, value)| -> String {
-            let value = (**value).to_string();
+    fields.iter().map(field_to_json).collect()
+}
 
-            if value == "true" || value == "false" {
-                return format!(r#""{}": {}"#, name, value);
-            }
+/// Transforms a StringTuple (name and value) to a json field
+/// ### Example:
+/// input: `(PI, 3.1416)` output: `"PI": 3.1416`
+pub fn field_to_json((name, value): &StringTuple) -> String {
+    let value = (*value).to_string();
 
-            if let Ok(x) = value.parse::<f64>() {
-                return format!(r#""{}": {}"#, name, x);
-            }
+    if value == "true" || value == "false" {
+        return format!(r#""{}": {}"#, name, value);
+    }
 
-            format!(r#""{}": "{}""#, name, value)
-        })
-        .collect()
+    // For relation_list, pinned_relation and pinned_relation_list
+    if value.starts_with('[') && value.ends_with(']') {
+        return format!(r#""{}": {}"#, name, value);
+    }
+
+    if let Ok(x) = value.parse::<f64>() {
+        if value.contains('.') {
+            return format!(r#""{}": {:?}"#, name, x);
+        } else {
+            return format!(r#""{}": {}"#, name, x.round());
+        }
+    }
+
+    format!(r#""{}": "{}""#, name, value)
 }

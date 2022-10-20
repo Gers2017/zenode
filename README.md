@@ -31,38 +31,63 @@ cargo test
 
 ```rs
 use zenode::{field, Operator};
+use zenode::FieldType::*;
 
 // create an Operator
 let op = Operator::default();
 
 // create a schema
-let mut fields = vec![field("pokemon_id", "int"), field("pokemon_name", "str")];
-let id = op.create_schema("POKEMON", "Pokemon schema", &mut fields).await?;
+let id = op.create_schema(
+    "POKEMON",
+    "Pokemon schema",
+    &mut [
+        field_def("pokemon_id", Int), // same as field("pokemon_id", "int")
+        field_def("pokemon_name", Str),
+    ]
+).await?;
 
 // generate schema_id
 let schema_id = format!("POKEMON_{}", id);
 
 // create an instance
-let mut fields = vec![field("pokemon_id", "1"), field("pokemon_name", "Bulbasaur")];
-let instance_id = op.create_instance(&schema_id, &mut fields).await?;
+let instance_id = op.create_instance(&schema_id, &mut [
+    field("pokemon_id", "1"), field("pokemon_name", "Bulbasaur")
+]).await?;
 
 // update the instance
-let mut fields = vec![field("pokemon_name", "Charmander")];
-let update_id = op.update_instance(&schema_id, &instance_id, &mut fields).await?;
+let update_id = op.update_instance(&schema_id, &instance_id, &mut [
+    field("pokemon_name", "Charmander")
+]).await?;
 
 // finally delete the instance
 let _delete_id = op.delete_instance(&schema_id, &update_id).await?;
 ```
 
+## Experimental Schema Builder
+
+```rs
+let op = Operator::default();
+
+let mut puppy_builder = SchemaBuilder::new("puppy", "Puppy schema", &op)
+    .field("name", Str)
+    .field("cuteness", Int);
+
+puppy_builder.build().await?;
+
+let tiramisu_id = puppy_builder
+    .instantiate(&mut [field("name", "Tiramisu"), field("cuteness", "200")])
+    .await?;
+```
+
 ## Features
 
-- [x] Create schemas
-- [x] Crate fields
-- [x] Crate instance
-- [x] Update instance
-- [x] Delete instance
-- [x] Read endpoint from env
-- [x] Better field to json
-- [ ] Save schema_id
-- [ ] Link schema name with schema_id
-- [ ] Serializable query string
+-   [x] Create schemas
+-   [x] Crate fields
+-   [x] Crate instance
+-   [x] Update instance
+-   [x] Delete instance
+-   [x] Read endpoint from env
+-   [x] Better field to json
+-   [ ] Save schema_id
+-   [ ] Link schema name with schema_id
+-   [ ] Serializable query string
