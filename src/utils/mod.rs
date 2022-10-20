@@ -45,6 +45,8 @@ pub fn fields_to_json_fields(fields: &[StringTuple]) -> Vec<String> {
 }
 
 /// Transforms a StringTuple (name and value) to a json field
+/// ### Example:
+/// input: `(PI, 3.1416)` output: `"PI": 3.1416`
 pub fn field_to_json((name, value): &StringTuple) -> String {
     let value = (*value).to_string();
 
@@ -58,7 +60,11 @@ pub fn field_to_json((name, value): &StringTuple) -> String {
     }
 
     if let Ok(x) = value.parse::<f64>() {
-        return format!(r#""{}": {}"#, name, x);
+        if value.contains('.') {
+            return format!(r#""{}": {:?}"#, name, x);
+        } else {
+            return format!(r#""{}": {}"#, name, x.round());
+        }
     }
 
     format!(r#""{}": "{}""#, name, value)

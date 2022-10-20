@@ -177,6 +177,16 @@ mod tests {
         );
 
         assert_eq!(
+            field_to_json(&field("float", "40.00000")),
+            String::from(r#""float": 40.0"#)
+        );
+
+        assert_eq!(
+            field_to_json(&field("int", "0000099")),
+            String::from(r#""int": 99"#)
+        );
+
+        assert_eq!(
             field_to_json(&field("vec", r#"["id_020208973fb0"]"#)),
             String::from(r#""vec": ["id_020208973fb0"]"#)
         );
@@ -207,5 +217,25 @@ mod tests {
             let (name, _) = f;
             assert_eq!(*name, *expected_name);
         }
+    }
+
+    #[test]
+    fn test_field_type() {
+        assert_eq!(
+            Relation("schema_02020fb20").to_string(),
+            "relation(schema_02020fb20)"
+        );
+        assert_eq!(
+            RelationList("schema_02020fb20").to_string(),
+            "relation_list(schema_02020fb20)"
+        );
+        assert_eq!(
+            PinnedRelation("schema_02020fb20").to_string(),
+            "pinned_relation(schema_02020fb20)"
+        );
+        assert_eq!(
+            PinnedRelationList("schema_02020fb20").to_string(),
+            "pinned_relation_list(schema_02020fb20)"
+        );
     }
 }
