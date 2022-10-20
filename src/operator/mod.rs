@@ -33,16 +33,28 @@ pub fn field(a: &str, b: &str) -> StringTuple {
     (a.to_string(), b.to_string())
 }
 
+/// Utility function to define a schema field
+///
+/// `field_def("number", FieldType::Int)` is equivalent to `field("number", "int")`
+///
+/// A subtle difference is that `FieldType::Relation(<id>)` is converted to `"relation(<id>)"`.
+/// The same applies to `RelationList, PinnedRelation, PinnedRelationList`
 pub fn field_def(name: &str, field_type: FieldType) -> StringTuple {
     (name.to_string(), field_type.to_string())
 }
 
+/// Utility function to create a relation_list/pinned_relation
+///
+/// Transforms the `ids` to a string in the shape: `[id, id, ...]`
 pub fn collection_field(name: &str, ids: &[&str]) -> StringTuple {
     let vec: Vec<String> = ids.iter().map(|x| format!("\"{}\"", x)).collect();
     let j = vec.join(", ");
     (name.to_string(), format!("[{}]", j))
 }
 
+/// Utility function to create a Pinned relation list
+///
+/// Transforms the `ids` to a string in the shape: `[[id], [id], ...]`
 pub fn collection_list_field(name: &str, ids: &[&str]) -> StringTuple {
     let vec: Vec<String> = ids.iter().map(|x| format!("[\"{}\"]", x)).collect();
     let j = vec.join(", ");
@@ -57,6 +69,15 @@ pub struct Operator {
     client: Client,
 }
 
+/// Utility Struct to build an Operator
+/// #### Example
+/// ```
+/// let op = Operator::builder()
+///   .version(1)
+///   .key_pair_path(PathBuf::from("key.txt"))
+///   .endpoint("http://localhost:2020/graphql")
+///   .build();
+/// ```
 pub struct OperatorBuilder {
     version: usize,
     key_pair_path: Option<PathBuf>,
@@ -365,6 +386,7 @@ impl Operator {
         Ok(data)
     }
 
+    /// Fetches an specific schema definition returning `SchemaDefinitionResponse` or `String` on error
     pub async fn get_schema_definition(
         &self,
         document_id: &str,

@@ -7,6 +7,7 @@ use std::convert::AsRef;
 
 pub struct SchemaBuilder<'a> {
     pub schema_id: String,
+    pub operation_id: String,
     pub name: String,
     pub description: String,
     pub fields: Vec<SchemaField<'a>>,
@@ -17,6 +18,7 @@ impl<'a> SchemaBuilder<'a> {
     pub fn new(name: &str, description: &str, operator: &'a Operator) -> SchemaBuilder<'a> {
         Self {
             schema_id: String::new(),
+            operation_id: String::new(),
             name: name.to_string(),
             description: description.to_string(),
             fields: Vec::new(),
@@ -38,12 +40,13 @@ impl<'a> SchemaBuilder<'a> {
             .map(|f| -> StringTuple { (f.name.clone(), f.field_type.to_string()) })
             .collect();
 
-        let schema_id = self
+        let operation_id = self
             .operator
             .create_schema(&self.name, &self.description, &mut fields)
             .await?;
 
-        self.schema_id = schema_id;
+        self.schema_id = format!("{}_{}", self.name, &operation_id);
+        self.operation_id = operation_id;
         Ok(())
     }
 

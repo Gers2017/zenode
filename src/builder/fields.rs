@@ -19,10 +19,10 @@ impl Display for FieldType<'_> {
             Int => write!(f, "int"),
             Float => write!(f, "float"),
             Str => write!(f, "str"),
-            Relation(id) => write!(f, "relation({})", id),
-            RelationList(id) => write!(f, "relation_list({})", id),
-            PinnedRelation(id) => write!(f, "pinned_relation({})", id),
-            PinnedRelationList(id) => write!(f, "pinned_relation_list({})", id),
+            Relation(schema_id) => write!(f, "relation({})", schema_id),
+            RelationList(schema_id) => write!(f, "relation_list({})", schema_id),
+            PinnedRelation(schema_id) => write!(f, "pinned_relation({})", schema_id),
+            PinnedRelationList(schema_id) => write!(f, "pinned_relation_list({})", schema_id),
         }
     }
 }
