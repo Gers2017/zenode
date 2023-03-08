@@ -1,8 +1,5 @@
-use crate::builder::fields::FieldType;
-use crate::graphql::{self, schemas::*};
-use crate::utils::*;
-use std::env;
-
+use crate::graphql::schemas::*;
+use crate::utils::get_key_pair;
 use gql_client::Client;
 use p2panda_rs::{
     self,
@@ -10,57 +7,13 @@ use p2panda_rs::{
     identity::KeyPair,
     operation::{encode::encode_plain_operation, plain::PlainOperation, traits::Actionable},
 };
+use serde::{Deserialize, Serialize};
+use serde_json::json;
+use std::collections::HashMap;
+use std::env;
+use std::error::Error;
 use std::fmt::{Debug, Display};
 use std::path::PathBuf;
-
-#[allow(dead_code)]
-#[derive(Copy, Clone, Debug)]
-#[repr(u8)]
-enum OperationAction {
-    Create = 0,
-    Update = 1,
-    Delete = 2,
-}
-
-impl Display for OperationAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as usize)
-    }
-}
-
-pub type StringTuple = (String, String);
-
-pub fn field(a: &str, b: &str) -> StringTuple {
-    (a.to_string(), b.to_string())
-}
-
-/// Utility function to define a schema field
-///
-/// `field_def("number", FieldType::Int)` is equivalent to `field("number", "int")`
-///
-/// A subtle difference is that `FieldType::Relation(<id>)` is converted to `"relation(<id>)"`.
-/// The same applies to `RelationList, PinnedRelation, PinnedRelationList`
-pub fn field_def(name: &str, field_type: FieldType) -> StringTuple {
-    (name.to_string(), field_type.to_string())
-}
-
-/// Utility function to create a relation_list/pinned_relation
-///
-/// Transforms the `ids` to a string in the shape: `[id, id, ...]`
-pub fn collection_field(name: &str, ids: &[&str]) -> StringTuple {
-    let vec: Vec<String> = ids.iter().map(|x| format!("\"{}\"", x)).collect();
-    let j = vec.join(", ");
-    (name.to_string(), format!("[{}]", j))
-}
-
-/// Utility function to create a Pinned relation list
-///
-/// Transforms the `ids` to a string in the shape: `[[id], [id], ...]`
-pub fn collection_list_field(name: &str, ids: &[&str]) -> StringTuple {
-    let vec: Vec<String> = ids.iter().map(|x| format!("[\"{}\"]", x)).collect();
-    let j = vec.join(", ");
-    (name.to_string(), format!("[{}]", j))
-}
 
 const DEFAULT_ENDPOINT: &str = "http://localhost:2020/graphql";
 
@@ -70,82 +23,15 @@ pub struct Operator {
     client: Client,
 }
 
-/// Utility Struct to build an Operator
-/// #### Example
-/// ```
-/// let op = Operator::builder()
-///   .version(1)
-///   .key_pair_path(PathBuf::from("key.txt"))
-///   .endpoint("http://localhost:2020/graphql")
-///   .build();
-/// ```
-pub struct OperatorBuilder {
-    version: usize,
-    key_pair_path: Option<PathBuf>,
-    endpoint: String,
-}
-
-impl Default for OperatorBuilder {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl OperatorBuilder {
-    pub fn new() -> Self {
-        OperatorBuilder {
-            version: 1,
-            key_pair_path: None,
-            endpoint: DEFAULT_ENDPOINT.to_string(),
-        }
-    }
-
-    pub fn version(mut self, v: usize) -> Self {
-        self.version = v;
-        self
-    }
-
-    pub fn key_pair_path(mut self, path: PathBuf) -> Self {
-        self.key_pair_path = Some(path);
-        self
-    }
-
-    pub fn endpoint(mut self, endpoint: &str) -> Self {
-        self.endpoint = endpoint.to_string();
-        self
-    }
-
-    pub fn build(self) -> Operator {
-        let Self {
-            version,
-            key_pair_path,
-            endpoint,
-        } = self;
-
-        Operator {
-            version,
-            key_pair: get_key_pair(key_pair_path),
-            client: Client::new(endpoint),
-        }
-    }
-}
-
-/// Creates a new Operator with default values
-/// `version: 1, key_pair: "key.txt", endpoint: ENDPOINT environment variable or "http://localhost:2020/graphql" as fallback`
-impl Default for Operator {
-    fn default() -> Self {
-        let endpoint = env::var("ENDPOINT").ok();
-        let mut operator = OperatorBuilder::new();
-
-        if let Some(endpoint) = endpoint {
-            operator = operator.endpoint(&endpoint);
-        }
-
-        operator.build()
-    }
-}
-
 impl Operator {
+    pub fn new(version: usize, key_pair: KeyPair, client: Client) -> Self {
+        Self {
+            version,
+            key_pair,
+            client,
+        }
+    }
+
     /// Creates a new Operator from scratch
     pub fn builder() -> OperatorBuilder {
         OperatorBuilder::new()
@@ -157,13 +43,16 @@ impl Operator {
         &self,
         name: &str,
         description: &str,
-        fields: &mut [StringTuple],
-    ) -> Result<String, String> {
+        fields: &SchemaFields,
+    ) -> Result<SchemaResponse, Box<dyn Error>> {
         // publish fields to node and retrieve field_ids
-        let field_ids = self.publish_fields(fields).await?;
+        let field_ids = self.publish_fields(&fields).await?;
 
         // create schema with field_ids
-        self.publish_schema(name, description, &field_ids).await
+        let schema = self
+            .publish_schema(name, description, &field_ids, &fields)
+            .await?;
+        Ok(schema)
     }
 
     /// Publishes the schema definition to the node
@@ -172,14 +61,15 @@ impl Operator {
         name: &str,
         description: &str,
         field_ids: &[String],
-    ) -> Result<String, String> {
+        fields: &SchemaFields,
+    ) -> Result<SchemaResponse, String> {
         let field_content: String = field_ids
             .iter()
             .map(|it| format!("[\"{}\"]", it))
             .collect::<Vec<_>>()
             .join(", ");
+
         /*
-            Fields should have the following shape:
             "fields": [
               ["<field_id>"],
               ["<field_id>"]
@@ -194,39 +84,54 @@ impl Operator {
             name
         );
 
-        self.send_to_node(&json).await
+        let id = self.send_to_node(&json).await?;
+        Ok(SchemaResponse {
+            id,
+            operator: self,
+            fields: fields.clone(),
+        })
     }
 
     /// Publishes the field definitions to the node
-    async fn publish_fields(&self, fields: &mut [StringTuple]) -> Result<Vec<String>, String> {
-        sort_fields(fields);
+    async fn publish_fields(&self, fields: &SchemaFields) -> Result<Vec<String>, String> {
+        let mut keys: Vec<_> = fields.keys().collect();
+        keys.sort_by(|a, b| a.cmp(b));
 
-        let mut field_ids: Vec<String> = Vec::with_capacity(fields.len());
+        let mut ids: Vec<String> = Vec::with_capacity(fields.len());
 
-        for (name, f_type) in fields.iter() {
-            let json = format!(
-                r#"[{}, {}, "schema_field_definition_v1", {{ "name": "{}", "type": "{}" }}]"#,
+        for key in keys.iter() {
+            let json_data = json!([
                 self.version,
                 OperationAction::Create,
-                name,
-                f_type
-            );
+                "schema_field_definition_v1",
+                {
+                    "name": key,
+                    "type": fields.get(&key.to_string()).unwrap(),
+                }
+            ]);
+            let x = json_data.to_string();
+            dbg!(&x);
+            let id = self.send_to_node(&x).await?;
 
-            let id = self.send_to_node(&json).await?;
-            field_ids.push(id);
+            ids.push(id);
         }
 
-        Ok(field_ids)
+        Ok(ids)
     }
 
     /// Creates an instance following the shape of the schema with the respective schema_id
-    pub async fn create_instance(
+    pub async fn create_document(
         &self,
         schema_id: &str,
-        fields: &mut [StringTuple],
-    ) -> Result<String, String> {
-        sort_fields(fields);
-        let payload_content: Vec<String> = fields_to_json_fields(fields);
+        fields: &DocumentFields,
+    ) -> Result<DocumentResponse, String> {
+        let mut keys: Vec<_> = fields.keys().collect();
+        keys.sort_by(|a, b| a.cmp(b));
+
+        let payload_content: Vec<_> = keys
+            .iter()
+            .map(|k| json!(fields.get(&k.to_string()).unwrap()).to_string())
+            .collect();
 
         // [1, 0, "chat_0020cae3b...", {"msg": "...", "username": "..." } ]
 
@@ -238,44 +143,12 @@ impl Operator {
             payload_content.join(", ")
         );
 
-        self.send_to_node(&json).await
-    }
-
-    /// Updates partially or completely an instance with the respective view_id
-    pub async fn update_instance(
-        &self,
-        schema_id: &str,
-        view_id: &str,
-        fields: &mut [StringTuple],
-    ) -> Result<String, String> {
-        sort_fields(fields);
-        let to_update: Vec<String> = fields_to_json_fields(fields);
-
-        //[1, 1, "chat_0020cae3b...", [ "<view_id>" ], { "username": "..." }]
-
-        let json = format!(
-            r#"[{}, {}, "{}", [ "{}" ], {{ {} }} ]"#,
-            self.version,
-            OperationAction::Update,
-            schema_id,
-            view_id,
-            to_update.join(", ")
-        );
-
-        self.send_to_node(&json).await
-    }
-
-    /// Deletes an instance with the respective view_id
-    pub async fn delete_instance(&self, schema_id: &str, view_id: &str) -> Result<String, String> {
-        let json = format!(
-            r#"[ {},{},"{}",["{}"] ]"#,
-            self.version,
-            OperationAction::Delete,
-            schema_id,
-            view_id
-        );
-
-        self.send_to_node(&json).await
+        let id = self.send_to_node(&json).await?;
+        Ok(DocumentResponse {
+            id,
+            operator: self,
+            fields: fields.clone(),
+        })
     }
 
     /// Handles p2panda operations and graphql requests
@@ -372,52 +245,212 @@ impl Operator {
 
         Ok(operation_id.to_string())
     }
+}
 
-    pub fn debug_print_public_key(&self) {
-        let public_key = self.key_pair.public_key();
-        println!("▶️ DEBUG PUB_KEY: {}", public_key);
+impl Default for Operator {
+    fn default() -> Self {
+        let endpoint = env::var("ENDPOINT").ok();
+        let mut operator = OperatorBuilder::new();
+
+        if let Some(endpoint) = endpoint {
+            operator = operator.endpoint(&endpoint);
+        }
+
+        operator.build()
+    }
+}
+
+#[allow(dead_code)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+enum OperationAction {
+    Create = 0,
+    Update = 1,
+    Delete = 2,
+}
+
+impl Display for OperationAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as usize)
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FieldType {
+    Bool,
+    Number,
+    String,
+    Relation(String),
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub enum FieldValue {
+    Number(usize),
+    String(String),
+    Boolean(bool),
+    Relation(String), // ???
+}
+
+type SchemaFields = HashMap<String, FieldType>;
+type DocumentFields = HashMap<String, FieldValue>;
+
+pub struct OperatorBuilder {
+    version: usize,
+    key_pair_path: Option<PathBuf>,
+    endpoint: String,
+}
+
+impl OperatorBuilder {
+    pub fn new() -> Self {
+        OperatorBuilder {
+            version: 1,
+            key_pair_path: None,
+            endpoint: DEFAULT_ENDPOINT.to_string(),
+        }
     }
 
-    /// Fetches all the schema definitions returning `AllSchemaDefinitionResponse` or `String` on error
-    pub async fn get_all_schema_definition(&self) -> Result<AllSchemaDefinitionResponse, String> {
-        let query = graphql::queries::get_all_schemas_query;
-        let data: AllSchemaDefinitionResponse = match self.client.query_unwrap(query).await {
-            Ok(data) => data,
-            Err(err) => return Err(err.to_string()),
-        };
-
-        Ok(data)
+    pub fn version(mut self, v: usize) -> Self {
+        self.version = v;
+        self
     }
 
-    /// Fetches an specific schema definition returning `SchemaDefinitionResponse` or `String` on error
-    pub async fn get_schema_definition(
+    pub fn key_pair_path(mut self, path: PathBuf) -> Self {
+        self.key_pair_path = Some(path);
+        self
+    }
+
+    pub fn endpoint(mut self, endpoint: &str) -> Self {
+        self.endpoint = endpoint.to_string();
+        self
+    }
+
+    pub fn build(self) -> Operator {
+        let Self {
+            version,
+            key_pair_path,
+            endpoint,
+        } = self;
+
+        Operator::new(version, get_key_pair(key_pair_path), Client::new(endpoint))
+    }
+}
+
+impl Default for OperatorBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+pub struct SchemaBuilder<'a> {
+    operator: &'a Operator,
+    name: String,
+    description: String,
+    map: HashMap<String, FieldType>,
+}
+
+impl<'a> SchemaBuilder<'a> {
+    pub fn new(operator: &'a Operator, name: &str, description: &str) -> SchemaBuilder<'a> {
+        SchemaBuilder {
+            name: name.to_string(),
+            description: description.to_string(),
+            map: HashMap::new(),
+            operator,
+        }
+    }
+
+    pub fn field(mut self, name: &str, value: FieldType) -> Self {
+        self.map.insert(name.to_string(), value);
+        self
+    }
+
+    pub async fn build(self) -> Result<SchemaResponse<'a>, Box<dyn Error>> {
+        let schema = self
+            .operator
+            .create_schema(&self.name, &self.description, &self.map)
+            .await?;
+        Ok(schema)
+    }
+}
+
+pub struct SchemaResponse<'a> {
+    pub id: String,
+    pub fields: HashMap<String, FieldType>,
+    operator: &'a Operator,
+}
+
+impl SchemaResponse<'_> {
+    pub async fn create_document(
         &self,
-        document_id: &str,
-        view_id: &str,
-    ) -> Result<SchemaDefinitionResponse, String> {
-        let query = graphql::queries::get_schema_query;
-        let vars = GetSchemaVars {
-            id: document_id.to_string(),
-            view_id: view_id.to_string(),
-        };
+        fields: &DocumentFields,
+    ) -> Result<DocumentResponse, Box<dyn Error>> {
+        let document = self.operator.create_document(&self.id, fields).await?;
+        Ok(document)
+    }
+    pub fn find(&self) -> DocumentResponse {
+        DocumentResponse {
+            id: "from_the_web".to_string(),
+            fields: HashMap::new(),
+            operator: self.operator,
+        }
+    }
+    pub fn find_many(&self, take: usize, skip: usize) -> Vec<DocumentResponse> {
+        Vec::new()
+    }
+}
 
-        let data = match self.client.query_with_vars_unwrap(query, vars).await {
-            Ok(data) => data,
-            Err(err) => return Err(err.to_string()),
-        };
+pub struct DocumentResponse<'a> {
+    pub id: String,
+    pub fields: HashMap<String, FieldValue>,
+    operator: &'a Operator,
+}
 
-        Ok(data)
+impl<'a> DocumentResponse<'a> {
+    pub async fn update_field(
+        &self,
+        name: &str,
+        value: FieldValue,
+    ) -> Result<String, Box<dyn Error>> {
+        let x = self.operator.send_to_node("some json data").await?;
+        Ok(x)
     }
 
-    pub async fn print_all_schemas(&self) -> Result<(), String> {
-        let data = self.get_all_schema_definition().await?;
-        serde_json::to_string_pretty(&data).map_err(|err| err.to_string())?;
-        Ok(())
+    // This mutates the document and may lead to bugs if the update didn't succeed
+    pub fn set_field(&mut self, key: &str, value: FieldValue) -> &mut Self {
+        self.fields.insert(key.to_string(), value);
+        self
     }
 
-    pub async fn print_schema(&self, document_id: &str, view_id: &str) -> Result<(), String> {
-        let data = self.get_schema_definition(document_id, view_id).await?;
-        serde_json::to_string_pretty(&data).map_err(|err| err.to_string())?;
-        Ok(())
+    pub async fn update(&self) -> Result<String, Box<dyn Error>> {
+        let x = self.operator.send_to_node("some json data").await?;
+        Ok(x)
+    }
+
+    pub async fn delete(&self) -> Result<String, Box<dyn Error>> {
+        let x = self.operator.send_to_node("some json data").await?;
+        Ok(x)
+    }
+}
+
+pub struct DocumentBuilder<'a> {
+    schema_response: &'a SchemaResponse<'a>,
+    map: HashMap<String, FieldValue>,
+}
+
+impl<'a> DocumentBuilder<'a> {
+    pub fn new(schema_response: &'a SchemaResponse) -> DocumentBuilder<'a> {
+        Self {
+            map: HashMap::new(),
+            schema_response,
+        }
+    }
+
+    pub fn field(mut self, key: &str, value: FieldValue) -> Self {
+        self.map.insert(key.to_string(), value);
+        self
+    }
+
+    pub async fn build(self) -> Result<DocumentResponse<'a>, Box<dyn Error>> {
+        let instance = self.schema_response.create_document(&self.map).await?;
+        Ok(instance)
     }
 }

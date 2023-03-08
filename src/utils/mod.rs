@@ -1,16 +1,8 @@
 use p2panda_rs::identity::KeyPair;
 
-use crate::StringTuple;
-
 use std::fs::{read_to_string, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-
-/// Utility function to sort `Vec<StringTuple>` in alphabetical order
-/// p2panda requires the fields in alphabetical order
-pub fn sort_fields(fields: &mut [StringTuple]) {
-    fields.sort_by(|a, b| a.0.cmp(&b.0))
-}
 
 /// Helper function to write a file.
 pub fn write_file(path: &PathBuf, content: &str) {
@@ -38,16 +30,11 @@ pub fn get_key_pair(path: Option<PathBuf>) -> KeyPair {
     KeyPair::from_private_key_str(&private_key).expect("Invalid private key")
 }
 
-/// Utility function to map a `Vec<StringTuple>` to `Vec<String>`
-/// The resulting string has the shape: `"a": "b"` or `"a": b` if b is a number or boolean
-pub fn fields_to_json_fields(fields: &[StringTuple]) -> Vec<String> {
-    fields.iter().map(field_to_json).collect()
-}
-
+/*
 /// Transforms a StringTuple (name and value) to a json field
 /// ### Example:
 /// input: `(PI, 3.1416)` output: `"PI": 3.1416`
-pub fn field_to_json((name, value): &StringTuple) -> String {
+ pub fn field_to_json((name, value): &StringTuple) -> String {
     let value = (*value).to_string();
 
     if value == "true" || value == "false" {
@@ -68,4 +55,4 @@ pub fn field_to_json((name, value): &StringTuple) -> String {
     }
 
     format!(r#""{}": "{}""#, name, value)
-}
+} */

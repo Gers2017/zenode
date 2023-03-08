@@ -51,7 +51,7 @@ impl<'a> SchemaBuilder<'a> {
     }
 
     pub async fn instantiate(&self, fields: &mut [StringTuple]) -> Result<String, String> {
-        self.operator.create_instance(&self.schema_id, fields).await
+        self.operator.create_document(&self.schema_id, fields).await
     }
 }
 
