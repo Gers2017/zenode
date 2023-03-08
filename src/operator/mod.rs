@@ -1,6 +1,7 @@
 use crate::builder::fields::FieldType;
 use crate::graphql::{self, schemas::*};
 use crate::utils::*;
+use std::env;
 
 use gql_client::Client;
 use p2panda_rs::{
@@ -129,23 +130,25 @@ impl OperatorBuilder {
     }
 }
 
+/// Creates a new Operator with default values
+/// `version: 1, key_pair: "key.txt", endpoint: ENDPOINT environment variable or "http://localhost:2020/graphql" as fallback`
+impl Default for Operator {
+    fn default() -> Self {
+        let endpoint = env::var("ENDPOINT").ok();
+        let mut operator = OperatorBuilder::new();
+
+        if let Some(endpoint) = endpoint {
+            operator = operator.endpoint(&endpoint);
+        }
+
+        operator.build()
+    }
+}
+
 impl Operator {
     /// Creates a new Operator from scratch
     pub fn builder() -> OperatorBuilder {
         OperatorBuilder::new()
-    }
-
-    /// Creates a new Operator with default values
-    /// `version: 1, path: "key.txt", endpoint: ENDPOINT env variable or if unset "http://localhost:2020/graphql"`
-    pub fn default() -> Self {
-        let endpoint = std::env::var("ENDPOINT").ok();
-        let mut op = Operator::builder();
-
-        if let Some(endpoint) = endpoint {
-            op = op.endpoint(&endpoint);
-        }
-
-        op.build()
     }
 
     /// Creates a schema by first publishing the fields, retrieving the field ids
