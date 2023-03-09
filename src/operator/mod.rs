@@ -1,5 +1,7 @@
-use crate::graphql::schemas::*;
+use crate::document::{DocumentFields, DocumentResponse};
+use crate::schema::SchemaFields;
 use crate::utils::get_key_pair;
+use crate::{graphql::schemas::*, schema::SchemaResponse};
 use gql_client::Client;
 use p2panda_rs::{
     self,
@@ -8,8 +10,6 @@ use p2panda_rs::{
     operation::{encode::encode_plain_operation, plain::PlainOperation, traits::Actionable},
 };
 use serde::{Deserialize, Serialize};
-use serde_json::json;
-use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::fmt::{Debug, Display};
@@ -18,12 +18,12 @@ use std::path::PathBuf;
 const DEFAULT_ENDPOINT: &str = "http://localhost:2020/graphql";
 
 pub struct Operator {
-    version: usize,
-    key_pair: KeyPair,
-    client: Client,
+    pub version: usize,
+    pub key_pair: KeyPair,
+    pub client: Client,
 }
 
-pub fn document_fields_to_json_fields(fields: &DocumentFields) -> Vec<String> {
+fn document_fields_to_json_fields(fields: &DocumentFields) -> Vec<String> {
     let mut keys: Vec<_> = fields.keys().collect();
     keys.sort_by(|a, b| a.cmp(b));
 
@@ -303,102 +303,6 @@ impl Default for Operator {
     }
 }
 
-#[allow(dead_code)]
-#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
-#[repr(u8)]
-enum OperationAction {
-    Create = 0,
-    Update = 1,
-    Delete = 2,
-}
-
-impl Display for OperationAction {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as u8)
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum FieldType {
-    Int,
-    Float,
-    Boolean,
-    String,
-    Relation(String),
-    RelationList(String),
-    PinnedRelation(String),
-    PinnedRelationList(String),
-}
-
-impl Display for FieldType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use FieldType::*;
-        match self {
-            Boolean => write!(f, "bool"),
-            Int => write!(f, "int"),
-            Float => write!(f, "float"),
-            String => write!(f, "str"),
-            Relation(schema_id) => write!(f, "relation({})", schema_id),
-            RelationList(schema_id) => write!(f, "relation_list({})", schema_id),
-            PinnedRelation(schema_id) => write!(f, "pinned_relation({})", schema_id),
-            PinnedRelationList(schema_id) => write!(f, "pinned_relation_list({})", schema_id),
-        }
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize)]
-pub enum FieldValue {
-    Int(i64),
-    Float(f64),
-    String(String),
-    Boolean(bool),
-    Relation(String),
-    RelationList(String),
-    PinnedRelation(String),
-    PinnedRelationList(String),
-}
-
-impl Display for FieldValue {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        use FieldValue::*;
-        match self {
-            Boolean(value) => write!(f, "{}", value),
-            Int(value) => write!(f, "{}", value),
-            Float(value) => write!(f, "{}", value),
-            // use "" on strings
-            String(value) => write!(f, "\"{}\"", value),
-            Relation(schema_id) => write!(f, "\"relation({})\"", schema_id),
-            RelationList(schema_id) => write!(f, "\"relation_list({})\"", schema_id),
-            PinnedRelation(schema_id) => write!(f, "\"pinned_relation({})\"", schema_id),
-            PinnedRelationList(schema_id) => write!(f, "\"pinned_relation_list({})\"", schema_id),
-        }
-    }
-}
-
-type SchemaFields = HashMap<String, FieldType>;
-type DocumentFields = HashMap<String, FieldValue>;
-
-pub struct DocumentFieldBuilder {
-    pub map: DocumentFields,
-}
-
-impl DocumentFieldBuilder {
-    pub fn new() -> Self {
-        Self {
-            map: HashMap::new(),
-        }
-    }
-
-    pub fn field(mut self, name: &str, value: FieldValue) -> Self {
-        self.map.insert(name.to_string(), value);
-        self
-    }
-
-    pub fn build(self) -> DocumentFields {
-        self.map
-    }
-}
-
 pub struct OperatorBuilder {
     version: usize,
     key_pair_path: Option<PathBuf>,
@@ -436,7 +340,8 @@ impl OperatorBuilder {
             endpoint,
         } = self;
 
-        Operator::new(version, get_key_pair(key_pair_path), Client::new(endpoint))
+        let key_pair = get_key_pair(key_pair_path);
+        Operator::new(version, key_pair, Client::new(endpoint))
     }
 }
 
@@ -446,139 +351,17 @@ impl Default for OperatorBuilder {
     }
 }
 
-pub struct SchemaBuilder<'a> {
-    operator: &'a Operator,
-    name: String,
-    description: String,
-    map: HashMap<String, FieldType>,
+#[allow(dead_code)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize)]
+#[repr(u8)]
+enum OperationAction {
+    Create = 0,
+    Update = 1,
+    Delete = 2,
 }
 
-impl<'a> SchemaBuilder<'a> {
-    pub fn new(operator: &'a Operator, name: &str, description: &str) -> SchemaBuilder<'a> {
-        SchemaBuilder {
-            name: name.to_string(),
-            description: description.to_string(),
-            map: HashMap::new(),
-            operator,
-        }
-    }
-
-    pub fn field(mut self, name: &str, value: FieldType) -> Self {
-        self.map.insert(name.to_string(), value);
-        self
-    }
-
-    pub async fn build(self) -> Result<SchemaResponse<'a>, Box<dyn Error>> {
-        let schema = self
-            .operator
-            .create_schema(&self.name, &self.description, &self.map)
-            .await?;
-        Ok(schema)
-    }
-}
-
-pub struct SchemaResponse<'a> {
-    pub id: String,
-    pub name: String,
-    pub fields: HashMap<String, FieldType>,
-    pub operator: &'a Operator,
-}
-
-impl SchemaResponse<'_> {
-    pub async fn spawn(&self, fields: &DocumentFields) -> Result<DocumentResponse, Box<dyn Error>> {
-        let document = self
-            .operator
-            .create_document(&self.get_schema_id(), fields)
-            .await?;
-        Ok(document)
-    }
-
-    pub fn get_schema_id(&self) -> String {
-        format!("{}_{}", self.name, self.id)
-    }
-
-    pub fn find_by_id(&self, view_id: &str) -> DocumentResponse {
-        todo!("Not implemented yet");
-    }
-    pub fn find_many(&self, take: usize, skip: usize) -> Vec<DocumentResponse> {
-        todo!("Not implemented yet");
-    }
-}
-
-pub struct DocumentResponse<'a> {
-    pub id: String,
-    pub schema_id: String,
-    pub fields: HashMap<String, FieldValue>,
-    pub operator: &'a Operator,
-}
-
-impl<'a> DocumentResponse<'a> {
-    pub fn new(
-        id: &str,
-        schema_id: &str,
-        fields: HashMap<String, FieldValue>,
-        operator: &'a Operator,
-    ) -> Self {
-        Self {
-            id: id.to_string(),
-            schema_id: schema_id.to_string(),
-            fields,
-            operator,
-        }
-    }
-
-    pub async fn update_field(
-        &self,
-        name: &str,
-        value: FieldValue,
-    ) -> Result<String, Box<dyn Error>> {
-        let fields = DocumentFieldBuilder::new().field(name, value).build();
-
-        let view_id = self
-            .operator
-            .update_document(&self.schema_id, &self.id, &fields)
-            .await?;
-
-        Ok(view_id)
-    }
-
-    pub async fn update(&self, fields: DocumentFields) -> Result<String, Box<dyn Error>> {
-        let view_id = self
-            .operator
-            .update_document(&self.schema_id, &self.id, &fields)
-            .await?;
-        Ok(view_id)
-    }
-
-    pub async fn delete(&self) -> Result<String, Box<dyn Error>> {
-        let view_id = self
-            .operator
-            .delete_document(&self.schema_id, &self.id)
-            .await?;
-        Ok(view_id)
-    }
-}
-
-pub struct DocumentBuilder<'a> {
-    schema_response: &'a SchemaResponse<'a>,
-    map: HashMap<String, FieldValue>,
-}
-
-impl<'a> DocumentBuilder<'a> {
-    pub fn new(schema_response: &'a SchemaResponse) -> DocumentBuilder<'a> {
-        Self {
-            map: HashMap::new(),
-            schema_response,
-        }
-    }
-
-    pub fn field(mut self, key: &str, value: FieldValue) -> Self {
-        self.map.insert(key.to_string(), value);
-        self
-    }
-
-    pub async fn build(self) -> Result<DocumentResponse<'a>, Box<dyn Error>> {
-        let document = self.schema_response.spawn(&self.map).await?;
-        Ok(document)
+impl Display for OperationAction {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}", *self as u8)
     }
 }

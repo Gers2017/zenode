@@ -1,21 +1,28 @@
 // pub mod builder;
+pub mod document;
+pub mod fields;
 pub mod graphql;
-mod operator;
+pub mod operator;
+pub mod schema;
 mod utils;
 
+pub use fields::*;
 pub use operator::*;
 
 #[cfg(test)]
 mod tests {
-    // use crate::builder::SchemaBuilder;
-    // use crate::utils::{field_to_json, sort_fields};
-    // use crate::{Operator};
-
+    use crate::{
+        document::{DocumentBuilder, DocumentFieldBuilder},
+        schema::SchemaBuilder,
+        FieldType, FieldValue, Operator,
+    };
     use std::{error::Error, time::Duration};
 
-    use crate::{
-        DocumentBuilder, DocumentFieldBuilder, FieldType, FieldValue, Operator, SchemaBuilder,
-    };
+    use tokio::time;
+
+    async fn wait(millis: u64) {
+        time::sleep(Duration::from_millis(millis)).await
+    }
 
     #[tokio::test]
     async fn shironeko() -> Result<(), Box<dyn Error>> {
@@ -33,7 +40,7 @@ mod tests {
             .build()
             .await?;
 
-        tokio::time::sleep(Duration::from_secs(5)).await;
+        wait(1000).await;
 
         let update_fields = DocumentFieldBuilder::new()
             .field("name", FieldValue::String("Nekopara Fan!".to_string()))
