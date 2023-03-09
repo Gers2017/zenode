@@ -23,6 +23,20 @@ pub struct Operator {
     client: Client,
 }
 
+pub fn document_fields_to_json_fields(fields: &DocumentFields) -> Vec<String> {
+    let mut keys: Vec<_> = fields.keys().collect();
+    keys.sort_by(|a, b| a.cmp(b));
+
+    let result: Vec<_> = keys
+        .iter()
+        .map(|key| {
+            let value = fields.get(&key.to_string()).unwrap().to_string();
+            format!("\"{}\": {}", &key, &value)
+        })
+        .collect();
+    result
+}
+
 impl Operator {
     pub fn new(version: usize, key_pair: KeyPair, client: Client) -> Self {
         Self {
@@ -68,14 +82,13 @@ impl Operator {
             .map(|it| format!("[\"{}\"]", it))
             .collect::<Vec<_>>()
             .join(", ");
-
         /*
             "fields": [
               ["<field_id>"],
               ["<field_id>"]
             ],
         */
-        let json = format!(
+        let json_data = format!(
             r#"[{}, {}, "schema_definition_v1", {{ "description": "{}", "fields": [{}], "name": "{}" }}]"#,
             self.version,
             OperationAction::Create,
@@ -84,9 +97,10 @@ impl Operator {
             name
         );
 
-        let id = self.send_to_node(&json).await?;
+        let id = self.send_to_node(&json_data).await?;
         Ok(SchemaResponse {
             id,
+            name: name.to_string(),
             operator: self,
             fields: fields.clone(),
         })
@@ -100,55 +114,84 @@ impl Operator {
         let mut ids: Vec<String> = Vec::with_capacity(fields.len());
 
         for key in keys.iter() {
-            let json_data = json!([
+            let json_data = format!(
+                r#"[{}, {}, "schema_field_definition_v1", {{ "name": "{}", "type": "{}" }}]"#,
                 self.version,
                 OperationAction::Create,
-                "schema_field_definition_v1",
-                {
-                    "name": key,
-                    "type": fields.get(&key.to_string()).unwrap(),
-                }
-            ]);
-            let x = json_data.to_string();
-            dbg!(&x);
-            let id = self.send_to_node(&x).await?;
+                key,
+                fields.get(&key.to_string()).unwrap()
+            );
 
+            let id = self.send_to_node(&json_data).await?;
             ids.push(id);
         }
 
         Ok(ids)
     }
 
-    /// Creates an instance following the shape of the schema with the respective schema_id
+    /// Creates an document following the shape of the schema with the respective schema_id
     pub async fn create_document(
         &self,
         schema_id: &str,
         fields: &DocumentFields,
     ) -> Result<DocumentResponse, String> {
-        let mut keys: Vec<_> = fields.keys().collect();
-        keys.sort_by(|a, b| a.cmp(b));
-
-        let payload_content: Vec<_> = keys
-            .iter()
-            .map(|k| json!(fields.get(&k.to_string()).unwrap()).to_string())
-            .collect();
+        let payload: Vec<_> = document_fields_to_json_fields(&fields);
 
         // [1, 0, "chat_0020cae3b...", {"msg": "...", "username": "..." } ]
 
-        let json = format!(
+        let json_data = format!(
             r#"[{}, {}, "{}", {{ {} }} ]"#,
             self.version,
             OperationAction::Create,
             schema_id,
-            payload_content.join(", ")
+            payload.join(", ")
         );
 
-        let id = self.send_to_node(&json).await?;
+        dbg!(&json_data);
+
+        let id = self.send_to_node(&json_data).await?;
         Ok(DocumentResponse {
             id,
-            operator: self,
+            schema_id: schema_id.to_string(),
             fields: fields.clone(),
+            operator: self,
         })
+    }
+
+    pub async fn update_document(
+        &self,
+        schema_id: &str,
+        view_id: &str,
+        fields: &DocumentFields,
+    ) -> Result<String, String> {
+        let payload: Vec<_> = document_fields_to_json_fields(&fields);
+
+        //[1, 1, "chat_0020cae3b...", [ "<view_id>" ], { "username": "..." }]
+
+        let json = format!(
+            r#"[{}, {}, "{}", [ "{}" ], {{ {} }} ]"#,
+            self.version,
+            OperationAction::Update,
+            schema_id,
+            view_id,
+            payload.join(", ")
+        );
+
+        let view_id = self.send_to_node(&json).await?;
+        Ok(view_id)
+    }
+
+    pub async fn delete_document(&self, schema_id: &str, view_id: &str) -> Result<String, String> {
+        let json = format!(
+            r#"[ {},{},"{}",["{}"] ]"#,
+            self.version,
+            OperationAction::Delete,
+            schema_id,
+            view_id
+        );
+
+        let view_id = self.send_to_node(&json).await?;
+        Ok(view_id)
     }
 
     /// Handles p2panda operations and graphql requests
@@ -271,28 +314,90 @@ enum OperationAction {
 
 impl Display for OperationAction {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", *self as usize)
+        write!(f, "{}", *self as u8)
     }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FieldType {
-    Bool,
-    Number,
+    Int,
+    Float,
+    Boolean,
     String,
     Relation(String),
+    RelationList(String),
+    PinnedRelation(String),
+    PinnedRelationList(String),
+}
+
+impl Display for FieldType {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use FieldType::*;
+        match self {
+            Boolean => write!(f, "bool"),
+            Int => write!(f, "int"),
+            Float => write!(f, "float"),
+            String => write!(f, "str"),
+            Relation(schema_id) => write!(f, "relation({})", schema_id),
+            RelationList(schema_id) => write!(f, "relation_list({})", schema_id),
+            PinnedRelation(schema_id) => write!(f, "pinned_relation({})", schema_id),
+            PinnedRelationList(schema_id) => write!(f, "pinned_relation_list({})", schema_id),
+        }
+    }
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub enum FieldValue {
-    Number(usize),
+    Int(i64),
+    Float(f64),
     String(String),
     Boolean(bool),
-    Relation(String), // ???
+    Relation(String),
+    RelationList(String),
+    PinnedRelation(String),
+    PinnedRelationList(String),
+}
+
+impl Display for FieldValue {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        use FieldValue::*;
+        match self {
+            Boolean(value) => write!(f, "{}", value),
+            Int(value) => write!(f, "{}", value),
+            Float(value) => write!(f, "{}", value),
+            // use "" on strings
+            String(value) => write!(f, "\"{}\"", value),
+            Relation(schema_id) => write!(f, "\"relation({})\"", schema_id),
+            RelationList(schema_id) => write!(f, "\"relation_list({})\"", schema_id),
+            PinnedRelation(schema_id) => write!(f, "\"pinned_relation({})\"", schema_id),
+            PinnedRelationList(schema_id) => write!(f, "\"pinned_relation_list({})\"", schema_id),
+        }
+    }
 }
 
 type SchemaFields = HashMap<String, FieldType>;
 type DocumentFields = HashMap<String, FieldValue>;
+
+pub struct DocumentFieldBuilder {
+    pub map: DocumentFields,
+}
+
+impl DocumentFieldBuilder {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn field(mut self, name: &str, value: FieldValue) -> Self {
+        self.map.insert(name.to_string(), value);
+        self
+    }
+
+    pub fn build(self) -> DocumentFields {
+        self.map
+    }
+}
 
 pub struct OperatorBuilder {
     version: usize,
@@ -374,60 +479,83 @@ impl<'a> SchemaBuilder<'a> {
 
 pub struct SchemaResponse<'a> {
     pub id: String,
+    pub name: String,
     pub fields: HashMap<String, FieldType>,
-    operator: &'a Operator,
+    pub operator: &'a Operator,
 }
 
 impl SchemaResponse<'_> {
-    pub async fn create_document(
-        &self,
-        fields: &DocumentFields,
-    ) -> Result<DocumentResponse, Box<dyn Error>> {
-        let document = self.operator.create_document(&self.id, fields).await?;
+    pub async fn spawn(&self, fields: &DocumentFields) -> Result<DocumentResponse, Box<dyn Error>> {
+        let document = self
+            .operator
+            .create_document(&self.get_schema_id(), fields)
+            .await?;
         Ok(document)
     }
-    pub fn find(&self) -> DocumentResponse {
-        DocumentResponse {
-            id: "from_the_web".to_string(),
-            fields: HashMap::new(),
-            operator: self.operator,
-        }
+
+    pub fn get_schema_id(&self) -> String {
+        format!("{}_{}", self.name, self.id)
+    }
+
+    pub fn find_by_id(&self, view_id: &str) -> DocumentResponse {
+        todo!("Not implemented yet");
     }
     pub fn find_many(&self, take: usize, skip: usize) -> Vec<DocumentResponse> {
-        Vec::new()
+        todo!("Not implemented yet");
     }
 }
 
 pub struct DocumentResponse<'a> {
     pub id: String,
+    pub schema_id: String,
     pub fields: HashMap<String, FieldValue>,
-    operator: &'a Operator,
+    pub operator: &'a Operator,
 }
 
 impl<'a> DocumentResponse<'a> {
+    pub fn new(
+        id: &str,
+        schema_id: &str,
+        fields: HashMap<String, FieldValue>,
+        operator: &'a Operator,
+    ) -> Self {
+        Self {
+            id: id.to_string(),
+            schema_id: schema_id.to_string(),
+            fields,
+            operator,
+        }
+    }
+
     pub async fn update_field(
         &self,
         name: &str,
         value: FieldValue,
     ) -> Result<String, Box<dyn Error>> {
-        let x = self.operator.send_to_node("some json data").await?;
-        Ok(x)
+        let fields = DocumentFieldBuilder::new().field(name, value).build();
+
+        let view_id = self
+            .operator
+            .update_document(&self.schema_id, &self.id, &fields)
+            .await?;
+
+        Ok(view_id)
     }
 
-    // This mutates the document and may lead to bugs if the update didn't succeed
-    pub fn set_field(&mut self, key: &str, value: FieldValue) -> &mut Self {
-        self.fields.insert(key.to_string(), value);
-        self
-    }
-
-    pub async fn update(&self) -> Result<String, Box<dyn Error>> {
-        let x = self.operator.send_to_node("some json data").await?;
-        Ok(x)
+    pub async fn update(&self, fields: DocumentFields) -> Result<String, Box<dyn Error>> {
+        let view_id = self
+            .operator
+            .update_document(&self.schema_id, &self.id, &fields)
+            .await?;
+        Ok(view_id)
     }
 
     pub async fn delete(&self) -> Result<String, Box<dyn Error>> {
-        let x = self.operator.send_to_node("some json data").await?;
-        Ok(x)
+        let view_id = self
+            .operator
+            .delete_document(&self.schema_id, &self.id)
+            .await?;
+        Ok(view_id)
     }
 }
 
@@ -450,7 +578,7 @@ impl<'a> DocumentBuilder<'a> {
     }
 
     pub async fn build(self) -> Result<DocumentResponse<'a>, Box<dyn Error>> {
-        let instance = self.schema_response.create_document(&self.map).await?;
-        Ok(instance)
+        let document = self.schema_response.spawn(&self.map).await?;
+        Ok(document)
     }
 }
