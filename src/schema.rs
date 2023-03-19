@@ -6,6 +6,27 @@ use std::error::Error;
 
 pub type SchemaFields = HashMap<String, FieldType>;
 
+pub struct SchemaFieldBuilder {
+    pub map: SchemaFields,
+}
+
+impl SchemaFieldBuilder {
+    pub fn new() -> Self {
+        Self {
+            map: HashMap::new(),
+        }
+    }
+
+    pub fn field(mut self, name: &str, value: FieldType) -> Self {
+        self.map.insert(name.to_string(), value);
+        self
+    }
+
+    pub fn build(self) -> SchemaFields {
+        self.map
+    }
+}
+
 pub struct SchemaResponse<'a> {
     pub id: String,
     pub name: String,
@@ -13,7 +34,16 @@ pub struct SchemaResponse<'a> {
     pub operator: &'a Operator,
 }
 
-impl SchemaResponse<'_> {
+impl<'a> SchemaResponse<'a> {
+    pub fn new(id: &str, name: &str, fields: SchemaFields, operator: &'a Operator) -> Self {
+        Self {
+            id: id.to_string(),
+            name: name.to_string(),
+            fields,
+            operator,
+        }
+    }
+
     pub async fn spawn(&self, fields: &DocumentFields) -> Result<DocumentResponse, Box<dyn Error>> {
         let document = self
             .operator
@@ -26,9 +56,10 @@ impl SchemaResponse<'_> {
         format!("{}_{}", self.name, self.id)
     }
 
-    pub fn find_by_id(&self, view_id: &str) -> DocumentResponse {
+    pub fn find_by_id(&self, document_id: &str, view_id: &str) -> DocumentResponse {
         todo!("Not implemented yet");
     }
+
     pub fn find_many(&self, take: usize, skip: usize) -> Vec<DocumentResponse> {
         todo!("Not implemented yet");
     }
