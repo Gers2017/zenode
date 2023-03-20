@@ -1,6 +1,9 @@
 use crate::document::{DocumentFields, DocumentResponse};
 use crate::fields::FieldType;
+use crate::graphql::schemas::{ManyDocumentsResponse, SingleDocumentResponse};
 use crate::operator::Operator;
+use gql_client::GraphQLError;
+use serde::de::DeserializeOwned;
 use std::collections::HashMap;
 use std::error::Error;
 
@@ -56,12 +59,47 @@ impl<'a> SchemaResponse<'a> {
         format!("{}_{}", self.name, self.id)
     }
 
-    pub fn find_by_id(&self, document_id: &str, view_id: &str) -> DocumentResponse {
-        todo!("Not implemented yet");
+    pub async fn find_single<T>(
+        &self,
+        view_id: &str,
+    ) -> Result<SingleDocumentResponse<T>, GraphQLError>
+    where
+        T: DeserializeOwned,
+    {
+        let field_query = self.field_keys().join(",");
+        let query = format!(
+            r#"query single_document {{  document: {}(viewId: "{}") {{ meta {{ documentId, viewId }} fields {{ {} }} }}  }}"#,
+            self.get_schema_id(),
+            view_id,
+            field_query
+        );
+
+        self.operator
+            .client
+            .query_unwrap::<SingleDocumentResponse<T>>(&query)
+            .await
     }
 
-    pub fn find_many(&self, take: usize, skip: usize) -> Vec<DocumentResponse> {
-        todo!("Not implemented yet");
+    pub async fn find_many<T>(&self) -> Result<ManyDocumentsResponse<T>, GraphQLError>
+    where
+        T: DeserializeOwned,
+    {
+        let field_query = self.field_keys().join(", ");
+
+        let query = format!(
+            r#"query many_document {{  documents: all_{} {{ meta {{ viewId documentId }} fields {{ {} }} }}  }}"#,
+            self.get_schema_id(),
+            field_query
+        );
+
+        self.operator
+            .client
+            .query_unwrap::<ManyDocumentsResponse<T>>(&query)
+            .await
+    }
+
+    pub fn field_keys(&self) -> Vec<String> {
+        self.fields.keys().cloned().collect()
     }
 }
 

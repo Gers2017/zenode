@@ -96,3 +96,26 @@ pub struct GetSchemaVars {
     pub id: String,
     pub view_id: String,
 }
+
+// single_document
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct SingleDocumentResponse<T> {
+    pub document: DocumentData<T>,
+}
+
+// many_documents
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct ManyDocumentsResponse<T> {
+    pub documents: Vec<DocumentData<T>>,
+}
+
+#[derive(Serialize, Deserialize, Debug)]
+#[serde(rename_all = "camelCase")]
+pub struct DocumentData<T> {
+    pub meta: Meta,
+    pub fields: T,
+}

@@ -168,7 +168,7 @@ impl Operator {
 
         //[1, 1, "chat_0020cae3b...", [ "<view_id>" ], { "username": "..." }]
 
-        let json = format!(
+        let json_data = format!(
             r#"[{}, {}, "{}", [ "{}" ], {{ {} }} ]"#,
             self.version,
             OperationAction::Update,
@@ -177,12 +177,12 @@ impl Operator {
             payload.join(", ")
         );
 
-        let view_id = self.send_to_node(&json).await?;
+        let view_id = self.send_to_node(&json_data).await?;
         Ok(view_id)
     }
 
     pub async fn delete_document(&self, schema_id: &str, view_id: &str) -> Result<String, String> {
-        let json = format!(
+        let json_data = format!(
             r#"[ {},{},"{}",["{}"] ]"#,
             self.version,
             OperationAction::Delete,
@@ -190,17 +190,17 @@ impl Operator {
             view_id
         );
 
-        let view_id = self.send_to_node(&json).await?;
+        let view_id = self.send_to_node(&json_data).await?;
         Ok(view_id)
     }
 
     /// Handles p2panda operations and graphql requests
-    async fn send_to_node(&self, json: &str) -> Result<String, String> {
+    async fn send_to_node(&self, json_data: &str) -> Result<String, String> {
         // 1. Load public key from key_pair
         let public_key = self.key_pair.public_key();
 
         // 2. Parse operation from JSON string
-        let operation_result = serde_json::from_str(json);
+        let operation_result = serde_json::from_str(json_data);
 
         let operation: PlainOperation = match operation_result {
             Ok(op) => op,
