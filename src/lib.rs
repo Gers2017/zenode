@@ -55,6 +55,7 @@ mod tests {
         document.update(update_fields).await?;
 
         // test schema methods
+
         match pet_schema.find_many::<PetSchema>().await {
             Ok(many_pets) => {
                 let first = many_pets.documents.get(0).unwrap();
@@ -72,6 +73,16 @@ mod tests {
                 panic!("Error at retrieving multiple documents: {}", e);
             }
         }
+
+        // test get definitions
+
+        let pet_definition = pet_schema.get_definition().await;
+        assert!(pet_definition.is_ok());
+
+        assert_eq!(pet_definition.unwrap().schema.meta.view_id, pet_schema.id);
+
+        let all_definitions = operator.get_all_schema_definition().await;
+        assert!(all_definitions.is_ok());
 
         Ok(())
     }

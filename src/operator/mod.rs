@@ -1,8 +1,9 @@
 use crate::document::{DocumentFields, DocumentResponse};
+use crate::graphql::queries::{get_all_schemas_query, get_schema_query};
 use crate::schema::SchemaFields;
 use crate::utils::get_key_pair;
 use crate::{graphql::schemas::*, schema::SchemaResponse};
-use gql_client::Client;
+use gql_client::{Client, GraphQLError};
 use p2panda_rs::{
     self,
     entry::{encode::sign_and_encode_entry, traits::AsEncodedEntry},
@@ -192,6 +193,30 @@ impl Operator {
 
         let view_id = self.send_to_node(&json_data).await?;
         Ok(view_id)
+    }
+
+    pub async fn get_all_schema_definition(
+        &self,
+    ) -> Result<AllSchemaDefinitionResponse, GraphQLError> {
+        self.client
+            .query_unwrap::<AllSchemaDefinitionResponse>(get_all_schemas_query)
+            .await
+    }
+
+    pub async fn get_schema_definition(
+        &self,
+        view_id: &str,
+    ) -> Result<SchemaDefinitionResponse, GraphQLError> {
+        let vars = GetSchemaVars {
+            view_id: view_id.to_string(),
+        };
+
+        self.client
+            .query_with_vars_unwrap::<SchemaDefinitionResponse, GetSchemaVars>(
+                get_schema_query,
+                vars,
+            )
+            .await
     }
 
     /// Handles p2panda operations and graphql requests

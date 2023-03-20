@@ -20,8 +20,8 @@ pub const get_all_schemas_query: &str = r#"query {
   "#;
 
 #[allow(non_upper_case_globals)]
-pub const get_schema_query: &str = r#"query Schema($id: DocumentId!, $viewId: DocumentViewId!) {
-  schema: schema_definition_v1(id: $id, viewId: $viewId) {
+pub const get_schema_query: &str = r#"query Schema($viewId: DocumentViewId!) {
+  schema: schema_definition_v1(viewId: $viewId) {
     meta {
       documentId
       viewId

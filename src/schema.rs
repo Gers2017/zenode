@@ -1,6 +1,8 @@
 use crate::document::{DocumentFields, DocumentResponse};
 use crate::fields::FieldType;
-use crate::graphql::schemas::{ManyDocumentsResponse, SingleDocumentResponse};
+use crate::graphql::schemas::{
+    ManyDocumentsResponse, SchemaDefinitionResponse, SingleDocumentResponse,
+};
 use crate::operator::Operator;
 use gql_client::GraphQLError;
 use serde::de::DeserializeOwned;
@@ -59,6 +61,10 @@ impl<'a> SchemaResponse<'a> {
         format!("{}_{}", self.name, self.id)
     }
 
+    pub fn field_keys(&self) -> Vec<String> {
+        self.fields.keys().cloned().collect()
+    }
+
     pub async fn find_single<T>(
         &self,
         view_id: &str,
@@ -98,8 +104,8 @@ impl<'a> SchemaResponse<'a> {
             .await
     }
 
-    pub fn field_keys(&self) -> Vec<String> {
-        self.fields.keys().cloned().collect()
+    pub async fn get_definition(&self) -> Result<SchemaDefinitionResponse, GraphQLError> {
+        self.operator.get_schema_definition(&self.id).await
     }
 }
 

@@ -93,7 +93,6 @@ pub struct FieldDefinition {
 #[derive(Serialize, Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
 pub struct GetSchemaVars {
-    pub id: String,
     pub view_id: String,
 }
 
