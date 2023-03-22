@@ -21,10 +21,10 @@ impl Display for FieldType {
             Int => write!(f, "int"),
             Float => write!(f, "float"),
             String => write!(f, "str"),
-            Relation(schema_id) => write!(f, "relation({})", schema_id),
-            RelationList(schema_id) => write!(f, "relation_list({})", schema_id),
-            PinnedRelation(schema_id) => write!(f, "pinned_relation({})", schema_id),
-            PinnedRelationList(schema_id) => write!(f, "pinned_relation_list({})", schema_id),
+            Relation(document_id) => write!(f, "relation({})", document_id),
+            RelationList(document_id) => write!(f, "relation_list({})", document_id),
+            PinnedRelation(document_id) => write!(f, "pinned_relation({})", document_id),
+            PinnedRelationList(document_id) => write!(f, "pinned_relation_list({})", document_id),
         }
     }
 }
@@ -50,10 +50,12 @@ impl Display for FieldValue {
             Float(value) => write!(f, "{}", value),
             // use "" on strings
             String(value) => write!(f, "\"{}\"", value),
-            Relation(schema_id) => write!(f, "\"relation({})\"", schema_id),
-            RelationList(schema_id) => write!(f, "\"relation_list({})\"", schema_id),
-            PinnedRelation(schema_id) => write!(f, "\"pinned_relation({})\"", schema_id),
-            PinnedRelationList(schema_id) => write!(f, "\"pinned_relation_list({})\"", schema_id),
+            Relation(document_id) => write!(f, "\"{}\"", document_id),
+            RelationList(document_id) => write!(f, "[{}]", document_id),
+            PinnedRelation(document_id) => write!(f, "[{}]", document_id),
+            PinnedRelationList(document_id) => {
+                write!(f, "[{}]", document_id)
+            }
         }
     }
 }

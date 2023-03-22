@@ -148,8 +148,6 @@ impl Operator {
             payload.join(", ")
         );
 
-        dbg!(&json_data);
-
         let id = self.send_to_node(&json_data).await?;
         Ok(DocumentResponse {
             id,
