@@ -54,26 +54,6 @@ mod tests {
 
         document.update(update_fields).await?;
 
-        // test schema methods
-
-        match pet_schema.find_many::<PetSchema>().await {
-            Ok(many_pets) => {
-                let first = many_pets.documents.get(0).unwrap();
-
-                println!("{:#?}", &many_pets.documents);
-
-                let single_pet = pet_schema
-                    .find_single::<PetSchema>(&first.meta.view_id)
-                    .await;
-
-                assert!(single_pet.is_ok());
-                println!("{:#?}", &single_pet.unwrap());
-            }
-            Err(e) => {
-                panic!("Error at retrieving multiple documents: {}", e);
-            }
-        }
-
         // test get definitions
 
         let pet_definition = pet_schema.get_definition().await;
