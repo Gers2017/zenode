@@ -11,6 +11,7 @@ use p2panda_rs::{
     operation::{encode::encode_plain_operation, plain::PlainOperation, traits::Actionable},
 };
 use serde::{Deserialize, Serialize};
+use std::collections::HashMap;
 use std::env;
 use std::error::Error;
 use std::fmt::{Debug, Display};
@@ -24,14 +25,16 @@ pub struct Operator {
     pub client: Client,
 }
 
-fn document_fields_to_json_fields(fields: &DocumentFields) -> Vec<String> {
+type MapStr<T> = HashMap<String, T>;
+
+fn document_fields_to_json_fields<T: Display>(fields: &MapStr<T>) -> Vec<String> {
     let mut keys: Vec<_> = fields.keys().collect();
     keys.sort();
 
     let result: Vec<_> = keys
         .iter()
         .map(|key| {
-            let value = fields.get(&key.to_string()).unwrap().to_string();
+            let value = fields.get(*key).unwrap().to_string();
             format!("\"{}\": {}", &key, &value)
         })
         .collect();
@@ -120,7 +123,7 @@ impl Operator {
                 self.version,
                 OperationAction::Create,
                 key,
-                fields.get(&key.to_string()).unwrap()
+                fields.get(*key).unwrap()
             );
 
             let id = self.send_to_node(&json_data).await?;

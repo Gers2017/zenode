@@ -36,17 +36,12 @@ impl Default for DocumentFieldBuilder {
 pub struct DocumentResponse<'a> {
     pub id: String,
     pub schema_id: String,
-    pub fields: HashMap<String, FieldValue>,
+    pub fields: DocumentFields,
     pub operator: &'a Operator,
 }
 
 impl<'a> DocumentResponse<'a> {
-    pub fn new(
-        id: &str,
-        schema_id: &str,
-        fields: HashMap<String, FieldValue>,
-        operator: &'a Operator,
-    ) -> Self {
+    pub fn new(id: &str, schema_id: &str, fields: DocumentFields, operator: &'a Operator) -> Self {
         Self {
             id: id.to_string(),
             schema_id: schema_id.to_string(),
@@ -89,7 +84,7 @@ impl<'a> DocumentResponse<'a> {
 
 pub struct DocumentBuilder<'a> {
     schema_response: &'a SchemaResponse<'a>,
-    map: HashMap<String, FieldValue>,
+    map: DocumentFields,
 }
 
 impl<'a> DocumentBuilder<'a> {

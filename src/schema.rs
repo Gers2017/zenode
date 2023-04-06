@@ -38,7 +38,7 @@ impl Default for SchemaFieldBuilder {
 pub struct SchemaResponse<'a> {
     pub id: String,
     pub name: String,
-    pub fields: HashMap<String, FieldType>,
+    pub fields: SchemaFields,
     pub operator: &'a Operator,
 }
 
@@ -73,7 +73,7 @@ pub struct SchemaBuilder<'a> {
     operator: &'a Operator,
     name: String,
     description: String,
-    map: HashMap<String, FieldType>,
+    map: SchemaFields,
 }
 
 impl<'a> SchemaBuilder<'a> {
