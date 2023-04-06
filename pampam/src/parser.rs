@@ -29,7 +29,7 @@ pub fn parse_fields(fields: &[String]) -> Result<Vec<StrTuple>, PamError> {
 }
 
 pub fn validate_type_fields(type_fields: &[StrTuple]) -> Result<(), PamError> {
-    type_fields.iter().map(validate_type_field).collect()
+    type_fields.iter().try_for_each(validate_type_field)
 }
 
 pub fn validate_type_field((_ident, typ): &StrTuple) -> Result<(), PamError> {

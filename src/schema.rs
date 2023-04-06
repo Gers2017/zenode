@@ -29,6 +29,12 @@ impl SchemaFieldBuilder {
     }
 }
 
+impl Default for SchemaFieldBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct SchemaResponse<'a> {
     pub id: String,
     pub name: String,

@@ -27,6 +27,12 @@ impl DocumentFieldBuilder {
     }
 }
 
+impl Default for DocumentFieldBuilder {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 pub struct DocumentResponse<'a> {
     pub id: String,
     pub schema_id: String,

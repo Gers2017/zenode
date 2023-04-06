@@ -26,7 +26,7 @@ pub struct Operator {
 
 fn document_fields_to_json_fields(fields: &DocumentFields) -> Vec<String> {
     let mut keys: Vec<_> = fields.keys().collect();
-    keys.sort_by(|a, b| a.cmp(b));
+    keys.sort();
 
     let result: Vec<_> = keys
         .iter()
@@ -61,11 +61,11 @@ impl Operator {
         fields: &SchemaFields,
     ) -> Result<SchemaResponse, Box<dyn Error>> {
         // publish fields to node and retrieve field_ids
-        let field_ids = self.publish_fields(&fields).await?;
+        let field_ids = self.publish_fields(fields).await?;
 
         // create schema with field_ids
         let schema = self
-            .publish_schema(name, description, &field_ids, &fields)
+            .publish_schema(name, description, &field_ids, fields)
             .await?;
         Ok(schema)
     }
@@ -110,7 +110,7 @@ impl Operator {
     /// Publishes the field definitions to the node
     async fn publish_fields(&self, fields: &SchemaFields) -> Result<Vec<String>, String> {
         let mut keys: Vec<_> = fields.keys().collect();
-        keys.sort_by(|a, b| a.cmp(b));
+        keys.sort();
 
         let mut ids: Vec<String> = Vec::with_capacity(fields.len());
 
@@ -136,7 +136,7 @@ impl Operator {
         schema_id: &str,
         fields: &DocumentFields,
     ) -> Result<DocumentResponse, String> {
-        let payload: Vec<_> = document_fields_to_json_fields(&fields);
+        let payload: Vec<_> = document_fields_to_json_fields(fields);
 
         // [1, 0, "chat_0020cae3b...", {"msg": "...", "username": "..." } ]
 
@@ -163,7 +163,7 @@ impl Operator {
         view_id: &str,
         fields: &DocumentFields,
     ) -> Result<String, String> {
-        let payload: Vec<_> = document_fields_to_json_fields(&fields);
+        let payload: Vec<_> = document_fields_to_json_fields(fields);
 
         //[1, 1, "chat_0020cae3b...", [ "<view_id>" ], { "username": "..." }]
 

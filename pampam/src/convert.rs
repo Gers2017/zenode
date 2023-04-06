@@ -49,7 +49,7 @@ pub fn convert_to_value_fields(
 ) -> Result<Vec<ValueFieldTuple>, PamError> {
     fields
         .iter()
-        .map(|(ident, value)| match_value_field(&value).map(|x| (ident.to_string(), x)))
+        .map(|(ident, value)| match_value_field(value).map(|x| (ident.to_string(), x)))
         .collect::<Result<Vec<_>, PamError>>()
 }
 
