@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use std::fmt::Display;
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
 pub enum FieldType {
     Int,
     Float,
@@ -29,7 +29,7 @@ impl Display for FieldType {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, PartialOrd)]
 pub enum FieldValue {
     Int(i64),
     Float(f64),
