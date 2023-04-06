@@ -99,11 +99,11 @@ pub async fn handle_commands(operator: &Operator, commands: &Commands) -> Result
         }
         Commands::SchemaDefinition(SchemaDefinitionCommands::All) => {
             let res = operator.get_all_schema_definition().await?;
-            println!("{:#?}", res);
+            println!("{}", res);
         }
         Commands::SchemaDefinition(SchemaDefinitionCommands::Single { view_id }) => {
             let res = operator.get_schema_definition(view_id).await?;
-            println!("{:#?}", res);
+            println!("{}", res);
         }
     };
 

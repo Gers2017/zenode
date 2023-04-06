@@ -3,7 +3,7 @@ use p2panda_rs::{
     hash::Hash,
 };
 use serde::{Deserialize, Serialize};
-use std::fmt::Debug;
+use std::fmt::{Debug, Display};
 
 // Necessary to create operations
 // ------------------------------------------------
@@ -47,6 +47,26 @@ pub struct AllSchemaDefinitionResponse {
 #[serde(rename_all = "camelCase")]
 pub struct SchemaDefinitionResponse {
     pub schema: SchemaDefinition,
+}
+
+impl Display for AllSchemaDefinitionResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            serde_json::to_string_pretty(self).unwrap_or_default()
+        )
+    }
+}
+
+impl Display for SchemaDefinitionResponse {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}",
+            serde_json::to_string_pretty(self).unwrap_or_default()
+        )
+    }
 }
 
 // GraphQL Schemas
