@@ -7,23 +7,15 @@ type StrTuple = (String, String);
 pub fn parse_fields(fields: &[String]) -> Result<Vec<StrTuple>, PamError> {
     fields
         .iter()
-        .map(|s| {
-            let v = s.split(':').collect::<Vec<_>>();
-
-            match v[..] {
-                [x, y] => {
-                    let f = (x.trim().to_string(), y.trim().to_lowercase());
-                    Ok(f)
-                }
-                [_] => Err(PamError::ParseError {
-                    field: s.to_string(),
-                    reason: format!("Error missing \":\" in field: \"{}\"", &s),
-                }),
-                _ => Err(PamError::ParseError {
-                    field: s.to_string(),
-                    reason: format!("Error more than one \":\" in field: \"{}\"", &s),
-                }),
+        .map(|s| match s.split_once(':') {
+            Some((x, y)) => {
+                let f = (x.trim().to_string(), y.trim().to_string());
+                Ok(f)
             }
+            None => Err(PamError::ParseError {
+                field: s.to_string(),
+                reason: format!("Error missing \":\" in field: \"{}\"", &s),
+            }),
         })
         .collect()
 }

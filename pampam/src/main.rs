@@ -50,13 +50,12 @@ pub async fn handle_commands(
                 schema_fields = schema_fields.field(&ident, typ);
             }
 
-            dbg!(&schema_fields.map);
-
             let res = operator
                 .create_schema(name, description, &schema_fields.build())
                 .await?;
 
-            println!("schema_id: {}  schema name: {}", &res.id, &res.name);
+            println!("schema_id: {}", &res.id);
+            println!("schema name: {}", &res.name);
         }
         Commands::Create(CreateCommands::Document { schema_id, fields }) => {
             let fields = parse_fields(fields)?;
@@ -68,13 +67,12 @@ pub async fn handle_commands(
                 document_fields = document_fields.field(&k, v);
             }
 
-            dbg!(&document_fields.map);
-
             let res = operator
                 .create_document(schema_id, &document_fields.build())
                 .await?;
 
             println!("document_id: {}", &res.id);
+            println!("schema_id: {}", &res.schema_id);
         }
         Commands::Update(UpdateCommands::Document {
             schema_id,
@@ -89,8 +87,6 @@ pub async fn handle_commands(
             for (k, v) in value_fields {
                 document_fields = document_fields.field(&k, v);
             }
-
-            dbg!(&document_fields.map);
 
             let update_id = operator
                 .update_document(schema_id, view_id, &document_fields.build())
