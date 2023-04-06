@@ -6,6 +6,7 @@ pub mod schema;
 mod utils;
 
 pub use fields::*;
+pub use gql_client;
 pub use operator::*;
 
 #[cfg(test)]

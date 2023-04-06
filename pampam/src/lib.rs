@@ -1,6 +1,7 @@
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 use std::{error::Error, fmt::Display};
+use zenode::gql_client::GraphQLError;
 
 pub mod convert;
 pub mod parser;
@@ -36,6 +37,19 @@ pub enum Commands {
     /// Subcommand to delete a document
     #[clap(subcommand)]
     Delete(DeleteCommands),
+
+    /// Subcommand to get schema definitions
+    #[clap(subcommand)]
+    #[clap(id = "schema-def", short_flag = 'd')]
+    SchemaDefinition(SchemaDefinitionCommands),
+}
+
+#[derive(Subcommand, Debug)]
+pub enum SchemaDefinitionCommands {
+    /// Get a single schema definition
+    Single { view_id: String },
+    /// Get all schema definitions
+    All,
 }
 
 #[derive(Subcommand, Debug)]
@@ -104,6 +118,18 @@ impl Error for PamError {}
 
 impl From<String> for PamError {
     fn from(value: String) -> Self {
-        PamError::GenericStringError(value)
+        Self::GenericStringError(value)
+    }
+}
+
+impl From<GraphQLError> for PamError {
+    fn from(value: GraphQLError) -> Self {
+        Self::GenericStringError(value.to_string())
+    }
+}
+
+impl From<Box<dyn Error>> for PamError {
+    fn from(value: Box<dyn Error>) -> Self {
+        Self::GenericStringError(value.to_string())
     }
 }

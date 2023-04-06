@@ -2,9 +2,10 @@ use clap::Parser;
 use pampam::{
     convert::{convert_to_type_fields, convert_to_value_fields},
     parser::{parse_fields, validate_type_fields},
-    Commands, CreateCommands, DeleteCommands, PamPamCli, UpdateCommands,
+    Commands, CreateCommands, DeleteCommands, PamError, PamPamCli, SchemaDefinitionCommands,
+    UpdateCommands,
 };
-use std::error::Error;
+
 use zenode::{document::DocumentFieldBuilder, schema::SchemaFieldBuilder, Operator};
 
 #[tokio::main]
@@ -29,10 +30,7 @@ async fn main() {
     }
 }
 
-pub async fn handle_commands(
-    operator: &Operator,
-    commands: &Commands,
-) -> Result<(), Box<dyn Error>> {
+pub async fn handle_commands(operator: &Operator, commands: &Commands) -> Result<(), PamError> {
     match commands {
         Commands::Create(CreateCommands::Schema {
             name,
@@ -98,6 +96,14 @@ pub async fn handle_commands(
             let delete_id = operator.delete_document(schema_id, view_id).await?;
 
             println!("deleted document_id: {}", &delete_id);
+        }
+        Commands::SchemaDefinition(SchemaDefinitionCommands::All) => {
+            let res = operator.get_all_schema_definition().await?;
+            println!("{:#?}", res);
+        }
+        Commands::SchemaDefinition(SchemaDefinitionCommands::Single { view_id }) => {
+            let res = operator.get_schema_definition(view_id).await?;
+            println!("{:#?}", res);
         }
     };
 

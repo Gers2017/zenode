@@ -954,7 +954,6 @@ dependencies = [
  "clap",
  "nom",
  "serde",
- "serde_json",
  "tokio",
  "zenode",
 ]
